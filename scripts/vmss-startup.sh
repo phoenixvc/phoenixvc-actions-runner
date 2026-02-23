@@ -4,8 +4,12 @@
 # This is a placeholder - integrate with your Scale Set Client's provisioning logic.
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../runner-version.env
+source "${SCRIPT_DIR}/../runner-version.env"
+VERSION="${RUNNER_VERSION}"
+
 JIT_ENDPOINT="${JIT_ENDPOINT:-http://10.0.4.4:8080/jit}"
-VERSION="2.311.0"
 RUNNER_DIR="/opt/gh-runner"
 
 mkdir -p "$RUNNER_DIR"
