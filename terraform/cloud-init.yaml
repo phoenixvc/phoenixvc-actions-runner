@@ -1,0 +1,17 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - jq
+  - git
+  - docker.io
+  - unzip
+
+runcmd:
+  - mkdir -p /opt/gh-runner
+  - curl -sL "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-x64-${runner_version}.tar.gz" -o /tmp/runner.tar.gz
+  - tar xzf /tmp/runner.tar.gz -C /opt/gh-runner
+  - chown -R azureuser:azureuser /opt/gh-runner
+  - echo "Listener VM ready. Run install-scale-set-client.sh and install-persistent-runner.sh manually."

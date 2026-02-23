@@ -1,0 +1,49 @@
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region"
+  type        = string
+}
+
+variable "runner_subnet_id" {
+  description = "ID of the runner subnet (from HouseOfVeritas terraform output)"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "prod"
+}
+
+variable "listener_vm_size" {
+  description = "VM size for the listener"
+  type        = string
+  default     = "Standard_B1ms"
+}
+
+variable "vmss_min_capacity" {
+  description = "Minimum VMSS instances (0 for scale-to-zero)"
+  type        = number
+  default     = 0
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key for VM access"
+  type        = string
+}
+
+variable "runner_version" {
+  description = "GitHub Actions runner version"
+  type        = string
+  default     = "2.311.0"
+}
+
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default     = {}
+}
