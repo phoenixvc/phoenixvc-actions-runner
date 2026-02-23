@@ -11,6 +11,8 @@ packages:
 
 runcmd:
   - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  - apt-get install -y nodejs
   - mkdir -p /opt/gh-runner
   - curl -sL "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-x64-${runner_version}.tar.gz" -o /tmp/runner.tar.gz
   - tar xzf /tmp/runner.tar.gz -C /opt/gh-runner
