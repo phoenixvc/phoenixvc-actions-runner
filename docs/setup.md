@@ -294,6 +294,36 @@ jobs:
 
 ---
 
+## Using the runner from JustAGhosT repos (cross-account)
+
+The runner infrastructure lives in **phoenixvc** Azure, but the persistent
+runner is registered to **JustAGhosT**. Repos under JustAGhosT (e.g.
+HouseOfVeritas) can use it.
+
+### Repo setup (no changes to this repo)
+
+1. **Runner registration:** The persistent runner must be installed (Phase 3.4)
+   and registered to JustAGhosT. Verify at **JustAGhosT** → **Settings** →
+   **Actions** → **Runners**.
+
+2. **Repository access:** If the runner was added with "Selected
+   repositories", add each JustAGhosT repo (e.g. HouseOfVeritas) to the
+   runner's allowed list. If "All repositories" was chosen, no action needed.
+
+3. **Workflow:** In the consuming repo, use
+   `runs-on: [self-hosted, azure-vnet-ghost]` for jobs that need VNet access
+   (Terraform, Key Vault, Storage).
+
+### Why cross-account works
+
+- The runner VM is in phoenixvc Azure (phoenixvc-actions-runner Terraform).
+- The runner *process* is registered to JustAGhosT via
+  `config.sh --url https://github.com/JustAGhosT`.
+- GitHub routes jobs from JustAGhosT repos to that runner when
+  `runs-on: [self-hosted, azure-vnet-ghost]` is used.
+
+---
+
 ## Cost
 
 | Item               | Monthly       |
