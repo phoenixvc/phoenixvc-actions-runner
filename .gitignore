@@ -1,3 +1,9 @@
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Secrets — never commit keys or credentials
+*.pem
+*.key
+*.b64
+terraform/key.*
