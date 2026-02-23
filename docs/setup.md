@@ -108,12 +108,23 @@ Alternatively, using Azure CLI:
 ```bash
 az ad sp create-for-rbac \
   --name phoenixvc-actions-runner-terraform \
-  --role Contributor \
+  --role "Contributor" \
   --scopes /subscriptions/<subscription-id>/resourceGroups/<runner-rg-name> \
-  --sdk-auth
+  --json-auth
 ```
 
-Map the JSON output fields to the four secrets above.
+Map the JSON output fields to the four secrets above. For production, prefer a
+least-privilege approach instead of full `Contributor`:
+
+- Create a custom role scoped to the runner resource group with only the
+  actions your Terraform actually uses (e.g., VM, NIC, subnet, and managed
+  identity operations), or
+- Combine built-in roles such as `Virtual Machine Contributor`,
+  `Network Contributor`, and `Storage Blob Data Contributor` if your modules
+  require them.
+
+Then use that narrower role name in `--role` with the same scoped
+`/subscriptions/.../resourceGroups/<runner-rg-name>`.
 
 #### 2.5.2 Runner network and SSH (Secrets)
 
@@ -265,3 +276,29 @@ jobs:
 - **Scale Set Client not scaling:** Check VMSS name in config; ensure Azure CLI/identity can scale VMSS.
 - **Persistent runner offline:** `sudo ./svc.sh status` in `/opt/gh-runner-justaghost`.
 - **VMSS instances not getting JIT config:** Implement HTTP endpoint in Scale Set Client wrapper; update `vmss-startup.sh` `JIT_ENDPOINT`.
+
+---
+
+## Dependency updates with Renovate
+
+This repo includes a basic `renovate.json` configuration to keep Terraform
+providers and GitHub Actions up to date in a controlled way.
+
+- Managers enabled:
+  - `terraform` (for `./terraform`)
+  - `github-actions` (for `.github/workflows`)
+- Updates are grouped into logical PRs (Terraform providers, GitHub Actions)
+  and scheduled to run during off-hours in the `Africa/Johannesburg` timezone.
+
+To use Renovate:
+
+1. Install/configure the Renovate bot for the `phoenixvc` GitHub organization
+   (either the hosted Renovate GitHub App or your self-hosted runner, per
+   org standards).
+2. Ensure the bot has access to this repository and respects the org-wide
+   Renovate onboarding settings.
+3. Review and merge the initial Renovate onboarding PR if one is opened, then
+   monitor subsequent dependency bump PRs as part of normal review flow.
+
+You can further tune `renovate.json` to add labels, reviewers, or additional
+package rules once the baseline is stable.
