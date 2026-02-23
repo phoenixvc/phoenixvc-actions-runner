@@ -42,6 +42,12 @@ variable "runner_version" {
   default     = "2.311.0"
 }
 
+variable "admin_cidr" {
+  description = "CIDR allowed to SSH into the listener VM (e.g. your public IP /32)"
+  type        = string
+  default     = "168.63.129.16/32"
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

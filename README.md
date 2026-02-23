@@ -17,7 +17,7 @@ See [docs/setup.md](docs/setup.md) for full setup.
 
 ## Structure
 
-```
+``` text
 terraform/     # Listener VM + VMSS (deploys into existing subnet)
 scripts/       # Install scripts for listener VM
 docs/          # Setup guide
