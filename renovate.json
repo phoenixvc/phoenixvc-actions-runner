@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base"
+  ],
+  "labels": ["deps"],
+  "timezone": "Africa/Johannesburg",
+  "schedule": [
+    "after 20:00 on monday",
+    "before 06:00 on tuesday"
+  ],
+  "rangeStrategy": "widen",
+  "enabledManagers": [
+    "terraform",
+    "github-actions"
+  ],
+  "packageRules": [
+    {
+      "description": "Group Terraform provider updates",
+      "matchManagers": ["terraform"],
+      "groupName": "terraform-providers",
+      "labels": ["deps", "terraform"]
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "labels": ["deps", "ci"]
+    }
+  ]
+}
