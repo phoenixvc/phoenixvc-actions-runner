@@ -1,5 +1,6 @@
 #!/bin/bash
-sudo tee /etc/phoenixvc-runner/key.pem > /dev/null << 'ENDKEY'
+# Fix the key - GitHub strips leading dashes from lines starting with 5+ dashes
+KEY=$(cat << 'RAWKEY'
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAsTaROJQ8x6qQkdRcS+SEE5HjwclQqcnL9of62bmnpmyMWk8+
 pYZ6GkO3iefGuHcddadiriZBD9/b4O9b50CdVL+2uXQT54GJiW9Md2kWVLGBpaW2
@@ -27,5 +28,9 @@ IlDhSQKBgQDCZqnt7swENMOMumYb0Qf6S8wo9SqeqirHBYX9+2F7YrcU39efAaYL
 91uNcZLtYNGZttj31uOHTqbb5j0HoocI8fZoqhIcPy53V/fr1UgI/QJsfcdo05wM
 Ec/EwiRmp2+tK+7R4r4yRmiEZe2MmtlIewQXTxQfs9gwoYWGtrHiCA==
 -----END RSA PRIVATE KEY-----
-ENDKEY
+RAWKEY
+)
+# Fix the missing dash on first line (GitHub strips it)
+KEY_FIXED="${KEY/-----BEGIN RSA PRIVATE KEY-----/-----BEGIN RSA PRIVATE KEY-----}"
+echo "$KEY_FIXED" | sudo tee /etc/phoenixvc-runner/key.pem > /dev/null
 sudo chmod 600 /etc/phoenixvc-runner/key.pem
