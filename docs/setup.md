@@ -18,7 +18,7 @@ Dual runner setup: phoenixvc org (ephemeral scale set) + JustAGhosT personal (pe
 2. **Name:** `phoenixvc-actions-runner`
 3. **Description** (copy-paste):
 
-   ```
+   ``` text
    Manages ephemeral GitHub Actions runners for phoenixvc org. Scales VMSS based on workflow demand. Used by Scale Set Client for Key Vault and Storage access from Azure VNet.
    ```
 
@@ -162,7 +162,7 @@ Configure these as **Variables** (not secrets):
 - `RUNNER_RESOURCE_GROUP_NAME`
 - `RUNNER_LOCATION`
 
-**Resource group naming convention**
+##### Resource group naming convention**
 
 - For runner infra, use:
 
@@ -184,7 +184,7 @@ Configure these as **Variables** (not secrets):
 
 Set `RUNNER_RESOURCE_GROUP_NAME` to the actual resource group name you created for runner infra.
 
-**Location**
+##### Location
 
 - Default region for this setup is **South Africa North**.
 - Set:
