@@ -110,7 +110,7 @@ az ad sp create-for-rbac \
   --name phoenixvc-actions-runner-terraform \
   --role "Contributor" \
   --scopes /subscriptions/<subscription-id>/resourceGroups/<runner-rg-name> \
-  --json-auth
+  --sdk-auth
 ```
 
 Map the JSON output fields to the four secrets above. For production, prefer a
@@ -162,7 +162,7 @@ Configure these as **Variables** (not secrets):
 - `RUNNER_RESOURCE_GROUP_NAME`
 - `RUNNER_LOCATION`
 
-##### Resource group naming convention**
+##### Resource group naming convention
 
 - For runner infra, use:
 
