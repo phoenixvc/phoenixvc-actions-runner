@@ -3,10 +3,14 @@
 # Run on the listener VM. Serves all personal repos.
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../runner-version.env
+source "${SCRIPT_DIR}/../runner-version.env"
+VERSION="${RUNNER_VERSION}"
+
 TOKEN="${GITHUB_RUNNER_TOKEN:?Set GITHUB_RUNNER_TOKEN - get from GitHub Settings > Actions > Runners > New self-hosted runner}"
 RUNNER_NAME="${RUNNER_NAME:-azure-vnet-ghost}"
 RUNNER_DIR="/opt/gh-runner-justaghost"
-VERSION="2.311.0"
 
 sudo mkdir -p "$RUNNER_DIR"
 sudo chown "$USER" "$RUNNER_DIR"

@@ -10,6 +10,15 @@ terraform {
       version = "~> 3.80"
     }
   }
+
+  # Uncomment to use Azure Storage backend for shared state:
+  # backend "azurerm" {
+  #   resource_group_name  = "pvc-prod-tfstate-rg-san"
+  #   storage_account_name = "pvcprodtfstatesa"
+  #   container_name       = "tfstate"
+  #   key                  = "actions-runner.tfstate"
+  #   use_oidc             = true
+  # }
 }
 
 provider "azurerm" {
