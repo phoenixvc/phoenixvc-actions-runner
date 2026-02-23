@@ -79,6 +79,113 @@ terraform apply ...
 terraform output -raw listener_private_ip
 ```
 
+### 2.5 GitHub Actions secrets and variables for Runner Terraform
+
+The `Runner Terraform` GitHub Actions workflow expects Azure credentials and runner settings to be provided via **Secrets** and **Variables** on the `phoenixvc/phoenixvc-actions-runner` repo.
+
+Go to: **Repository** → **Settings** → **Secrets and variables** → **Actions**.
+
+#### 2.5.1 Azure authentication (Secrets)
+
+These are standard ARM env vars for Terraform on Azure:
+
+- `ARM_CLIENT_ID`
+- `ARM_CLIENT_SECRET`
+- `ARM_TENANT_ID`
+- `ARM_SUBSCRIPTION_ID`
+
+Typical way to obtain them (service principal with client secret):
+
+1. In Azure, create an App registration (or reuse an existing Terraform SP) with access to the subscription/resource group.
+2. Note the following from the App registration:
+   - **Application (client) ID** → `ARM_CLIENT_ID`
+   - **Directory (tenant) ID** → `ARM_TENANT_ID`
+3. Create a client secret under **Certificates & secrets** and copy the value → `ARM_CLIENT_SECRET`.
+4. In Azure Portal or CLI, get the Subscription ID → `ARM_SUBSCRIPTION_ID`.
+
+Alternatively, using Azure CLI:
+
+```bash
+az ad sp create-for-rbac \
+  --name phoenixvc-actions-runner-terraform \
+  --role Contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/<runner-rg-name> \
+  --sdk-auth
+```
+
+Map the JSON output fields to the four secrets above.
+
+#### 2.5.2 Runner network and SSH (Secrets)
+
+Additional secrets for the runner infra:
+
+- `RUNNER_SUBNET_ID`
+- `RUNNER_SSH_PUBLIC_KEY`
+
+**`RUNNER_SUBNET_ID`**
+
+- From the HouseOfVeritas Terraform environment (or equivalent):
+
+  ```bash
+  cd ../HouseOfVeritas/terraform/environments/production
+  terraform output -raw runner_subnet_id
+  ```
+
+- Copy the output value into the `RUNNER_SUBNET_ID` secret.
+
+**`RUNNER_SSH_PUBLIC_KEY`**
+
+- Use an existing SSH key, or generate a new one on your workstation:
+
+  ```bash
+  ssh-keygen -t ed25519 -C "phoenixvc-runner" -f ~/.ssh/phoenixvc-runner
+  ```
+
+- Put the **public** key content (the `.pub` file) into the `RUNNER_SSH_PUBLIC_KEY` secret.
+- Never store the private key in GitHub or this repo.
+
+#### 2.5.3 Runner resource group and location (Variables)
+
+Configure these as **Variables** (not secrets):
+
+- `RUNNER_RESOURCE_GROUP_NAME`
+- `RUNNER_LOCATION`
+
+**Resource group naming convention**
+
+- For runner infra, use:
+
+  ```text
+  pvc-prod-<short-project-name>-rg-san
+  ```
+
+- Example:
+
+  ```text
+  pvc-prod-actionsrunner-rg-san
+  ```
+
+- This follows the pattern: `pvc-prod-{projectname shortened}-{resource type}-location`,
+  where:
+  - environment = `prod`
+  - resource type suffix = `rg`
+  - location suffix = `san` (South Africa North)
+
+Set `RUNNER_RESOURCE_GROUP_NAME` to the actual resource group name you created for runner infra.
+
+**Location**
+
+- Default region for this setup is **South Africa North**.
+- Set:
+
+  ```text
+  RUNNER_LOCATION = South Africa North
+  ```
+
+Once all of the above are configured, you can trigger the `Runner Terraform` workflow from
+**Actions → Runner Terraform → Run workflow**, starting with `apply = false` (plan only), then
+`apply = true` when you are ready to apply.
+
 ---
 
 ## Phase 3: Install on Listener VM
@@ -145,11 +252,11 @@ jobs:
 
 ## Cost
 
-| Item | Monthly |
-|------|---------|
-| Listener VM (B1ms) | ~$15 |
-| VMSS (pay-per-use) | ~$1–5 |
-| **Total** | **~$16–20** |
+| Item               | Monthly     |
+| ------------------ | ----------- |
+| Listener VM (B1ms) | ~$15        |
+| VMSS (pay-per-use) | ~$1–5       |
+| **Total**          | **~$16–20** |
 
 ---
 
