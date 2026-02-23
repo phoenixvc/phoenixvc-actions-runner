@@ -10,6 +10,11 @@ if [ -f "${SCRIPT_DIR}/../runner-version.env" ]; then
 fi
 VERSION="${RUNNER_VERSION:-2.311.0}"
 
+if ! command -v az &>/dev/null; then
+  echo "Azure CLI not found — installing..."
+  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+fi
+
 TOKEN="${GITHUB_RUNNER_TOKEN:?Set GITHUB_RUNNER_TOKEN - get from GitHub Settings > Actions > Runners > New self-hosted runner}"
 RUNNER_NAME="${RUNNER_NAME:-azure-vnet-ghost}"
 RUNNER_DIR="/opt/gh-runner-justaghost"
