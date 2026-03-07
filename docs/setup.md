@@ -272,6 +272,39 @@ export GITHUB_RUNNER_TOKEN="<token-from-github-ui>"
 ./install-persistent-runner.sh
 ```
 
+### 3.5 Install Windows Runner (JustAGhosT/agentkit-forge)
+
+For repos that need a **Windows** runner (e.g., `agentkit-forge`):
+
+1. Go to **JustAGhosT/agentkit-forge** → **Settings** → **Actions** →
+   **Runners** → **New self-hosted runner**
+2. Select **Windows** / **x64** and copy the registration token
+3. On the target Windows machine, open an **elevated PowerShell**:
+
+```powershell
+$env:GITHUB_RUNNER_TOKEN = "<token-from-github-ui>"
+.\scripts\setup-windows-runner.ps1
+```
+
+The script will:
+
+- Create `\actions-runner` at the drive root (recommended by GitHub to
+  avoid long-path and permission issues on Windows)
+- Download and verify runner **v2.332.0**
+- Configure the runner for `JustAGhosT/agentkit-forge`
+- Install and start it as a Windows service
+
+You can override defaults with parameters:
+
+```powershell
+.\scripts\setup-windows-runner.ps1 `
+  -RunnerName "my-custom-name" `
+  -RunnerDir "D:\actions-runner" `
+  -Labels "self-hosted,windows,x64,gpu"
+```
+
+Check status anytime: `\actions-runner\svc.cmd status`
+
 ---
 
 ## Phase 4: Workflow Updates
@@ -284,12 +317,20 @@ jobs:
     runs-on: [azure-vnet]
 ```
 
-### JustAGhosT repos
+### JustAGhosT repos (Linux)
 
 ```yaml
 jobs:
   build:
     runs-on: [self-hosted, azure-vnet-ghost]
+```
+
+### JustAGhosT/agentkit-forge (Windows)
+
+```yaml
+jobs:
+  build:
+    runs-on: self-hosted
 ```
 
 ---
