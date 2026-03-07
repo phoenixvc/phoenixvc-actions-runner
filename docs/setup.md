@@ -260,17 +260,43 @@ export GITHUB_APP_KEY_PATH="/etc/phoenixvc-runner/key.pem"
 sudo systemctl enable --now phoenixvc-scale-set
 ```
 
-### 3.4 Install Persistent Runner (JustAGhosT)
+### 3.4 Install Persistent Runner(s) (JustAGhosT)
 
-1. Go to **JustAGhosT** → **Settings** → **Actions** → **Runners** →
-   **New self-hosted runner**
-2. Copy the registration token
-3. On listener VM:
+Runner configs live in `runners.d/*.conf`. Each file defines one
+runner registration (repo URL, name, labels).
+
+#### Install all runners
+
+1. Get a registration token from **each repo** → **Settings** →
+   **Actions** → **Runners** → **New self-hosted runner**
+2. On listener VM:
 
 ```bash
-export GITHUB_RUNNER_TOKEN="<token-from-github-ui>"
-./install-persistent-runner.sh
+# If all repos share the same token (same owner):
+export GITHUB_RUNNER_TOKEN="<token>"
+./scripts/install-all-runners.sh
 ```
+
+#### Install a single runner
+
+```bash
+export GITHUB_RUNNER_TOKEN="<token-from-repo-settings>"
+./scripts/install-persistent-runner.sh runners.d/agentkit-forge.conf
+```
+
+#### Add a new repo
+
+Create a new conf file in `runners.d/`:
+
+```bash
+cat > runners.d/my-repo.conf << 'EOF'
+GITHUB_REPO_URL=https://github.com/JustAGhosT/my-repo
+RUNNER_NAME=my-repo-linux
+RUNNER_LABELS=self-hosted,Linux,X64,azure-vnet-ghost
+EOF
+```
+
+Then install it with `install-persistent-runner.sh runners.d/my-repo.conf`.
 
 ### 3.5 Install Windows Runner (JustAGhosT/agentkit-forge)
 
@@ -343,13 +369,14 @@ HouseOfVeritas) can use it.
 
 ### Repo setup (no changes to this repo)
 
-1. **Runner registration:** The persistent runner must be installed (Phase 3.4)
-   and registered to JustAGhosT. Verify at **JustAGhosT** → **Settings** →
-   **Actions** → **Runners**.
+1. **Runner registration:** Each repo needs its own runner registered at
+   the repo level (Phase 3.4). Add a `.conf` file in `runners.d/` for
+   each repo. Verify at **repo** → **Settings** → **Actions** →
+   **Runners**.
 
-2. **Repository access:** If the runner was added with "Selected
-   repositories", add each JustAGhosT repo (e.g. HouseOfVeritas) to the
-   runner's allowed list. If "All repositories" was chosen, no action needed.
+2. **No runner sharing needed:** Since runners are registered per-repo,
+   there is no "repository access" to configure. Each repo's runner
+   only picks up jobs from that repo.
 
 3. **Workflow:** In the consuming repo, use
    `runs-on: [self-hosted, azure-vnet-ghost]` for jobs that need VNet access
@@ -358,10 +385,11 @@ HouseOfVeritas) can use it.
 ### Why cross-account works
 
 - The runner VM is in phoenixvc Azure (phoenixvc-actions-runner Terraform).
-- The runner *process* is registered to JustAGhosT via
-  `config.sh --url https://github.com/JustAGhosT`.
-- GitHub routes jobs from JustAGhosT repos to that runner when
-  `runs-on: [self-hosted, azure-vnet-ghost]` is used.
+- Each runner process is registered at the **repo level** (e.g.,
+  `config.sh --url https://github.com/JustAGhosT/agentkit-forge`).
+  Personal accounts don't support account-level runners — only orgs do.
+- GitHub routes jobs to the runner when workflow `runs-on:` labels match
+  the runner's labels (e.g., `[self-hosted, azure-vnet-ghost]`).
 
 ---
 
@@ -379,8 +407,8 @@ HouseOfVeritas) can use it.
 
 - **Scale Set Client not scaling:** Check VMSS name in config; ensure
   Azure CLI/identity can scale VMSS.
-- **Persistent runner offline:** `sudo ./svc.sh status` in
-  `/opt/gh-runner-justaghost`.
+- **Persistent runner offline:** `sudo /opt/gh-runner-<name>/svc.sh status`
+  (directory matches `RUNNER_NAME` from the `.conf` file).
 - **VMSS instances not getting JIT config:** Implement HTTP endpoint in
   Scale Set Client wrapper; update `vmss-startup.sh` `JIT_ENDPOINT`.
 - **`Resource not accessible by integration` (403):** Ensure the GitHub
