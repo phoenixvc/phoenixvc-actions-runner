@@ -262,13 +262,17 @@ sudo systemctl enable --now phoenixvc-scale-set
 
 ### 3.4 Install Persistent Runner (JustAGhosT)
 
-1. Go to **JustAGhosT** → **Settings** → **Actions** → **Runners** →
-   **New self-hosted runner**
+1. Go to **JustAGhosT/agentkit-forge** → **Settings** → **Actions** →
+   **Runners** → **New self-hosted runner**
 2. Copy the registration token
 3. On listener VM:
 
 ```bash
 export GITHUB_RUNNER_TOKEN="<token-from-github-ui>"
+# Optional overrides (defaults shown):
+# export REPO_URL="https://github.com/JustAGhosT/agentkit-forge"
+# export RUNNER_NAME="azure-vnet-ghost"
+# export RUNNER_LABELS="self-hosted,Linux,X64,azure-vnet-ghost"
 ./install-persistent-runner.sh
 ```
 
