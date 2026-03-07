@@ -101,46 +101,23 @@ Go to: **Repository** → **Settings** → **Secrets and variables** →
 
 #### 2.5.1 Azure authentication (Secrets)
 
-These are standard ARM env vars for Terraform on Azure:
+The workflows use **OIDC** (federated credentials) — no client secret
+is needed. Required secrets:
 
-- `ARM_CLIENT_ID`
-- `ARM_CLIENT_SECRET`
-- `ARM_TENANT_ID`
-- `ARM_SUBSCRIPTION_ID`
+- `ARM_CLIENT_ID` — App registration (client) ID
+- `ARM_TENANT_ID` — Directory (tenant) ID
+- `ARM_SUBSCRIPTION_ID` — Azure subscription ID
 
-Typical way to obtain them (service principal with client secret):
+Set up OIDC federated credentials on the App registration:
 
 1. In Azure, create an App registration (or reuse an existing
    Terraform SP) with access to the subscription/resource group.
-2. Note the following from the App registration:
-   - **Application (client) ID** → `ARM_CLIENT_ID`
-   - **Directory (tenant) ID** → `ARM_TENANT_ID`
-3. Create a client secret under **Certificates & secrets** and copy
-   the value → `ARM_CLIENT_SECRET`.
-4. In Azure Portal or CLI, get the Subscription ID →
-   `ARM_SUBSCRIPTION_ID`.
-
-Alternatively, using Azure CLI:
-
-```bash
-az ad sp create-for-rbac \
-  --name phoenixvc-actions-runner-terraform \
-  --role "Contributor" \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/<runner-rg-name>
-```
-
-Map the JSON output fields to the four secrets above. For production,
-prefer a least-privilege approach instead of full `Contributor`:
-
-- Create a custom role scoped to the runner resource group with only
-  the actions your Terraform actually uses (e.g., VM, NIC, subnet,
-  and managed identity operations), or
-- Combine built-in roles such as `Virtual Machine Contributor`,
-  `Network Contributor`, and `Storage Blob Data Contributor` if your
-  modules require them.
-
-Then use that narrower role name in `--role` with the same scoped
-`/subscriptions/.../resourceGroups/<runner-rg-name>`.
+2. Under **Certificates & secrets** → **Federated credentials**, add
+   a credential for the GitHub Actions OIDC issuer
+   (`https://token.actions.githubusercontent.com`) scoped to this repo.
+3. Grant the SP appropriate roles on the runner resource group (e.g.,
+   `Contributor`, or narrower: `Virtual Machine Contributor` +
+   `Network Contributor` + `Monitoring Contributor`).
 
 #### 2.5.2 Runner network and SSH (Secrets)
 
@@ -400,6 +377,52 @@ HouseOfVeritas) can use it.
 | Listener VM (B2s)  | ~R560         |
 | VMSS (pay-per-use) | ~R20–90       |
 | **Total**          | **~R580–650** |
+
+---
+
+## Operations
+
+### Workflows
+
+This repo includes three GitHub Actions workflows:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **Runner Terraform** | `workflow_dispatch` | Plan/apply Terraform (VM, VMSS, autoscale, alerts) |
+| **Runner Health Check** | Every 15 min + `workflow_dispatch` | Checks all runner services on listener VM, auto-restarts any that are down |
+| **Scale Runners** | `workflow_dispatch` + every 30 min | On-demand VMSS burst (`capacity=1-4`), scheduled taper back to 0 when idle |
+
+### VMSS Autoscale
+
+The VMSS has Azure Monitor autoscale rules:
+
+- **Scale up**: +1 instance when average CPU > 70% for 5 minutes
+- **Scale down**: -1 instance when average CPU < 20% for 10 minutes
+- **Range**: 0 (min) to 4 (max) instances
+- **Cooldown**: 5 min (up), 10 min (down) to prevent flapping
+
+For immediate burst capacity, use the **Scale Runners** workflow:
+
+```bash
+gh workflow run "Scale Runners" -f capacity=3
+```
+
+Idle instances automatically taper back to 0 via the scheduled job.
+
+### Monitoring
+
+- **Azure Monitor alert**: Fires (Sev 1) when the listener VM is
+  unavailable for > 30 minutes. Configure notification receivers
+  (email, webhook, etc.) on the `prod-runner-alerts` action group in
+  the Azure Portal.
+- **Health check workflow**: Runs every 15 minutes, auto-restarts
+  failed runner services. Can also be triggered manually.
+
+### Swap
+
+The listener VM has a 2GB swap file to prevent OOM kills. This is
+configured in `cloud-init.yaml` for new VMs and was applied manually
+to the existing VM.
 
 ---
 
