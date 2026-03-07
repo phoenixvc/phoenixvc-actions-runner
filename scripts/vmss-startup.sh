@@ -6,8 +6,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=../runner-version.env
-source "${SCRIPT_DIR}/../runner-version.env"
-VERSION="${RUNNER_VERSION}"
+if [ -f "${SCRIPT_DIR}/../runner-version.env" ]; then
+  source "${SCRIPT_DIR}/../runner-version.env"
+fi
+VERSION="${RUNNER_VERSION:-2.311.0}"
 
 JIT_ENDPOINT="${JIT_ENDPOINT:-http://10.0.4.4:8080/jit}"
 RUNNER_DIR="/opt/gh-runner"

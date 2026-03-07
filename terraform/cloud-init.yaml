@@ -10,6 +10,13 @@ packages:
   - unzip
 
 runcmd:
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  - apt-get install -y nodejs
+  - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+  - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list
+  - apt-get update -qq
+  - apt-get install -y terraform
   - mkdir -p /opt/gh-runner
   - curl -sL "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-x64-${runner_version}.tar.gz" -o /tmp/runner.tar.gz
   - tar xzf /tmp/runner.tar.gz -C /opt/gh-runner
