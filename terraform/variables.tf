@@ -22,13 +22,19 @@ variable "environment" {
 variable "listener_vm_size" {
   description = "VM size for the listener"
   type        = string
-  default     = "Standard_B1ms"
+  default     = "Standard_B2s"
 }
 
 variable "vmss_min_capacity" {
   description = "Minimum VMSS instances (0 for scale-to-zero)"
   type        = number
   default     = 0
+}
+
+variable "vmss_max_capacity" {
+  description = "Maximum VMSS instances for autoscale"
+  type        = number
+  default     = 4
 }
 
 variable "ssh_public_key" {

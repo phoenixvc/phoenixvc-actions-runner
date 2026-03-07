@@ -160,3 +160,97 @@ resource "azurerm_linux_virtual_machine_scale_set" "phoenixvc" {
 
   tags = var.tags
 }
+
+# --- VMSS Autoscale ---
+
+resource "azurerm_monitor_autoscale_setting" "vmss" {
+  name                = "${var.environment}-runner-vmss-autoscale"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  target_resource_id  = azurerm_linux_virtual_machine_scale_set.phoenixvc.id
+
+  profile {
+    name = "default"
+
+    capacity {
+      default = var.vmss_min_capacity
+      minimum = var.vmss_min_capacity
+      maximum = var.vmss_max_capacity
+    }
+
+    rule {
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.phoenixvc.id
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT5M"
+        time_aggregation   = "Average"
+        operator           = "GreaterThan"
+        threshold          = 70
+      }
+
+      scale_action {
+        direction = "Increase"
+        type      = "ChangeCount"
+        value     = "1"
+        cooldown  = "PT5M"
+      }
+    }
+
+    rule {
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.phoenixvc.id
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT10M"
+        time_aggregation   = "Average"
+        operator           = "LessThan"
+        threshold          = 20
+      }
+
+      scale_action {
+        direction = "Decrease"
+        type      = "ChangeCount"
+        value     = "1"
+        cooldown  = "PT10M"
+      }
+    }
+  }
+
+  tags = var.tags
+}
+
+# --- Azure Monitor: alert when listener VM is unavailable > 30 min ---
+
+resource "azurerm_monitor_action_group" "runner_alerts" {
+  name                = "${var.environment}-runner-alerts"
+  resource_group_name = var.resource_group_name
+  short_name          = "RunnerAlert"
+
+  tags = var.tags
+}
+
+resource "azurerm_monitor_metric_alert" "listener_vm_unavailable" {
+  name                = "${var.environment}-listener-vm-unavailable"
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_linux_virtual_machine.listener.id]
+  severity            = 1
+  frequency           = "PT5M"
+  window_size         = "PT30M"
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "VmAvailabilityMetric"
+    aggregation      = "Average"
+    operator         = "LessThan"
+    threshold        = 1
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.runner_alerts.id
+  }
+
+  tags = var.tags
+}
