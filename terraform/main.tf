@@ -40,7 +40,7 @@ resource "azurerm_network_interface" "listener" {
 }
 
 resource "azurerm_public_ip" "listener" {
-  name                = "${var.environment}-runner-listener-public-ip"
+  name                = "listener-public-ip"
   location            = var.location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
@@ -109,6 +109,10 @@ resource "azurerm_linux_virtual_machine" "listener" {
   }))
 
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [custom_data]
+  }
 }
 
 resource "azurerm_linux_virtual_machine_scale_set" "phoenixvc" {
