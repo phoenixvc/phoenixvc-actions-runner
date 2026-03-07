@@ -14,7 +14,7 @@ on:
           - "3"
           - "4"
   schedule:
-    # Every 30 min, taper idle instances back to 0
+    # Every 30 min, auto-scale based on queued jobs and CPU
     - cron: "*/30 * * * *"
 
 permissions:
@@ -43,12 +43,54 @@ jobs:
             --new-capacity ${{ github.event.inputs.capacity }}
           echo "Scaled VMSS to ${{ github.event.inputs.capacity }} instances"
 
-  taper-down:
-    name: Taper idle VMSS instances
+  auto-scale:
+    name: Auto-scale VMSS (queued jobs + CPU)
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (for runners.d configs)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: runners.d
+
+      - name: Check for queued jobs across repos
+        id: queued
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_GITHUB_PAT }}
+        run: |
+          QUEUED=0
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "RUNNER_GITHUB_PAT not set — skipping job queue check (CPU-only scaling)"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            echo "skip_queue_check=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check phoenixvc org for queued runs
+          ORG_QUEUED=$(gh api "/orgs/phoenixvc/actions/runs?status=queued&per_page=100" \
+            --jq '.total_count' 2>/dev/null || echo "0")
+          echo "phoenixvc org queued runs: $ORG_QUEUED"
+          QUEUED=$((QUEUED + ORG_QUEUED))
+
+          # Check each repo in runners.d/*.conf for queued runs
+          for conf in runners.d/*.conf; do
+            [ -f "$conf" ] || continue
+            REPO_URL=$(grep -oP 'GITHUB_REPO_URL=\K.*' "$conf" 2>/dev/null || true)
+            [ -z "$REPO_URL" ] && continue
+            # Extract owner/repo from URL
+            REPO=$(echo "$REPO_URL" | sed 's|https://github.com/||')
+            REPO_QUEUED=$(gh api "/repos/$REPO/actions/runs?status=queued&per_page=100" \
+              --jq '.total_count' 2>/dev/null || echo "0")
+            echo "$REPO queued runs: $REPO_QUEUED"
+            QUEUED=$((QUEUED + REPO_QUEUED))
+          done
+
+          echo "Total queued: $QUEUED"
+          echo "count=$QUEUED" >> "$GITHUB_OUTPUT"
+          echo "skip_queue_check=false" >> "$GITHUB_OUTPUT"
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -56,16 +98,37 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
-      - name: Check and taper VMSS
+      - name: Auto-scale VMSS
+        env:
+          QUEUED: ${{ steps.queued.outputs.count }}
+          SKIP_QUEUE: ${{ steps.queued.outputs.skip_queue_check }}
         run: |
           RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
           VMSS="prod-runner-phoenixvc-vmss"
 
           CURRENT=$(az vmss show -g "$RG" -n "$VMSS" --query "sku.capacity" -o tsv)
           echo "Current capacity: $CURRENT"
+          echo "Queued jobs: $QUEUED"
 
+          # --- Scale UP if jobs are queued and capacity is insufficient ---
+          if [ "$QUEUED" -gt 0 ] && [ "$CURRENT" -lt "$QUEUED" ]; then
+            # Scale to match queued jobs, capped at 4
+            TARGET=$QUEUED
+            [ "$TARGET" -gt 4 ] && TARGET=4
+            echo "Queued jobs ($QUEUED) > current capacity ($CURRENT) — scaling to $TARGET"
+            az vmss scale -g "$RG" -n "$VMSS" --new-capacity "$TARGET"
+            exit 0
+          fi
+
+          # --- Scale DOWN if idle ---
           if [ "$CURRENT" -le 0 ]; then
             echo "Already at 0, nothing to do"
+            exit 0
+          fi
+
+          # If jobs are queued, don't scale down
+          if [ "$QUEUED" -gt 0 ]; then
+            echo "Jobs still queued ($QUEUED), keeping $CURRENT instances"
             exit 0
           fi
 

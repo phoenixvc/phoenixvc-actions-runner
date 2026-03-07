@@ -125,6 +125,10 @@ Additional secrets for the runner infra:
 
 - `RUNNER_SUBNET_ID`
 - `RUNNER_SSH_PUBLIC_KEY`
+- `RUNNER_GITHUB_PAT` *(optional)* — A PAT with `actions:read` scope
+  for cross-repo job queue checking. Without this, the Scale Runners
+  workflow falls back to CPU-only autoscaling. Create a fine-grained
+  PAT scoped to the phoenixvc org + JustAGhosT repos.
 
 **`RUNNER_SUBNET_ID`**
 
@@ -390,7 +394,7 @@ This repo includes three GitHub Actions workflows:
 |----------|---------|---------|
 | **Runner Terraform** | `workflow_dispatch` | Plan/apply Terraform (VM, VMSS, autoscale, alerts) |
 | **Runner Health Check** | Every 15 min + `workflow_dispatch` | Checks all runner services on listener VM, auto-restarts any that are down |
-| **Scale Runners** | `workflow_dispatch` + every 30 min | On-demand VMSS burst (`capacity=1-4`), scheduled taper back to 0 when idle |
+| **Scale Runners** | `workflow_dispatch` + every 30 min | On-demand VMSS burst (`capacity=1-4`), auto-scale based on queued jobs + CPU |
 
 ### VMSS Autoscale
 
@@ -407,7 +411,12 @@ For immediate burst capacity, use the **Scale Runners** workflow:
 gh workflow run "Scale Runners" -f capacity=3
 ```
 
-Idle instances automatically taper back to 0 via the scheduled job.
+The scheduled job (every 30 min) automatically:
+
+- **Scales up** if queued jobs are detected across phoenixvc org and
+  `runners.d/*.conf` repos (requires `RUNNER_GITHUB_PAT` secret)
+- **Tapers down** by 1 instance when CPU < 10% and no queued jobs
+- Without `RUNNER_GITHUB_PAT`, falls back to CPU-only scaling
 
 ### Monitoring
 
