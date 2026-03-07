@@ -1,0 +1,91 @@
+name: Scale Runners
+
+on:
+  workflow_dispatch:
+    inputs:
+      capacity:
+        description: "Number of VMSS instances to scale to"
+        required: true
+        default: "2"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+  schedule:
+    # Every 30 min, taper idle instances back to 0
+    - cron: "*/30 * * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  scale-up:
+    name: Scale VMSS to ${{ github.event.inputs.capacity }} instances
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Scale up VMSS
+        run: |
+          az vmss scale \
+            -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
+            -n prod-runner-phoenixvc-vmss \
+            --new-capacity ${{ github.event.inputs.capacity }}
+          echo "Scaled VMSS to ${{ github.event.inputs.capacity }} instances"
+
+  taper-down:
+    name: Taper idle VMSS instances
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Check and taper VMSS
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          VMSS="prod-runner-phoenixvc-vmss"
+
+          CURRENT=$(az vmss show -g "$RG" -n "$VMSS" --query "sku.capacity" -o tsv)
+          echo "Current capacity: $CURRENT"
+
+          if [ "$CURRENT" -le 0 ]; then
+            echo "Already at 0, nothing to do"
+            exit 0
+          fi
+
+          # Check average CPU across instances over last 10 min
+          AVG_CPU=$(az monitor metrics list \
+            --resource "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/$RG/providers/Microsoft.Compute/virtualMachineScaleSets/$VMSS" \
+            --metric "Percentage CPU" \
+            --interval PT10M \
+            --aggregation Average \
+            --query "value[0].timeseries[0].data[-1].average" \
+            -o tsv 2>/dev/null || echo "0")
+
+          echo "Average CPU: ${AVG_CPU}%"
+
+          # If CPU < 10%, scale down by 1 (min 0)
+          if [ "$(echo "$AVG_CPU < 10" | bc -l 2>/dev/null || echo 1)" = "1" ]; then
+            NEW=$((CURRENT - 1))
+            [ "$NEW" -lt 0 ] && NEW=0
+            echo "Low utilization — scaling from $CURRENT to $NEW"
+            az vmss scale -g "$RG" -n "$VMSS" --new-capacity "$NEW"
+          else
+            echo "CPU above threshold, keeping $CURRENT instances"
+          fi

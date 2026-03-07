@@ -397,9 +397,9 @@ HouseOfVeritas) can use it.
 
 | Item               | Monthly       |
 | ------------------ | ------------- |
-| Listener VM (B1ms) | ~R280         |
+| Listener VM (B2s)  | ~R560         |
 | VMSS (pay-per-use) | ~R20–90       |
-| **Total**          | **~R300–370** |
+| **Total**          | **~R580–650** |
 
 ---
 

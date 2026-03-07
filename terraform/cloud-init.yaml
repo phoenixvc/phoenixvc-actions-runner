@@ -10,6 +10,13 @@ packages:
   - unzip
 
 runcmd:
+  # Swap (prevents OOM on small VMs)
+  - fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo "/swapfile none swap sw 0 0" >> /etc/fstab
+  # Tools
   - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
   - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   - apt-get install -y nodejs
