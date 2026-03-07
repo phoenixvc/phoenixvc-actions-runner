@@ -67,3 +67,14 @@ jobs:
       - name: Terraform apply
         if: ${{ github.event.inputs.apply == 'true' }}
         run: terraform apply -input=false tfplan
+
+      - name: Restart runner service on listener VM
+        if: ${{ github.event.inputs.apply == 'true' }}
+        working-directory: .
+        run: |
+          LISTENER_VM=$(cd terraform && terraform output -raw listener_vm_name 2>/dev/null || echo "prod-runner-listener")
+          az vm run-command invoke \
+            -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
+            -n "$LISTENER_VM" \
+            --command-id RunShellScript \
+            --scripts "for svc in /etc/systemd/system/actions.runner.*.service; do [ -f \"\$svc\" ] && sudo systemctl restart \$(basename \$svc) && echo \"Restarted: \$(basename \$svc)\"; done || echo 'No runner services found'"
