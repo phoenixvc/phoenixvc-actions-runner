@@ -39,7 +39,7 @@ variable "ssh_public_key" {
 variable "runner_version" {
   description = "GitHub Actions runner version"
   type        = string
-  default     = "2.311.0"
+  default     = "2.332.0"
 }
 
 variable "admin_cidr" {
