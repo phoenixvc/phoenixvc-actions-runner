@@ -11,18 +11,29 @@
 #   3. Copy the token shown in the configure step
 
 param(
-    [string]$RunnerVersion = "2.332.0",
+    # RunnerVersion defaults to the value in runner-version.env if present.
+    # ExpectedHash must be updated when RunnerVersion changes — see
+    # https://github.com/actions/runner/releases for the correct SHA256.
+    # Pass "" for ExpectedHash to skip hash verification.
+    [string]$RunnerVersion,
     [string]$RunnerName    = "agentkit-forge-win",
     [string]$RunnerDir     = "\actions-runner",
     [string]$RepoUrl       = "https://github.com/JustAGhosT/agentkit-forge",
     [string]$Labels        = "self-hosted,windows,x64",
-    # SHA256 hash for the runner zip. Default matches v2.332.0.
-    # When overriding RunnerVersion, set this to the matching hash from
-    # https://github.com/actions/runner/releases or use "" to skip verification.
     [string]$ExpectedHash  = "83E56E05B21EB58C9697F82E52C53B30867335FF039CD5D44D1A1A24D2149F4B"
 )
 
 $ErrorActionPreference = "Stop"
+
+# Derive RunnerVersion from runner-version.env if not explicitly provided
+if (-not $RunnerVersion) {
+    $envFile = Join-Path $PSScriptRoot "..\runner-version.env"
+    if (Test-Path $envFile) {
+        $match = Select-String -Path $envFile -Pattern 'RUNNER_VERSION="?([^"]+)"?' | Select-Object -First 1
+        if ($match) { $RunnerVersion = $match.Matches[0].Groups[1].Value }
+    }
+    if (-not $RunnerVersion) { $RunnerVersion = "2.332.0" }
+}
 
 $Token = $env:GITHUB_RUNNER_TOKEN
 if (-not $Token) {

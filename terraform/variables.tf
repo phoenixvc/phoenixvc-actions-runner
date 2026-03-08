@@ -55,17 +55,16 @@ variable "admin_cidr" {
 }
 
 variable "tags" {
-  description = "Tags to apply to resources (must include: environment, project, owner, cost_center)"
+  description = "Additional tags to apply to resources. Must include: project, owner, cost_center. The environment tag is always derived from var.environment."
   type        = map(string)
   default = {
-    environment = "prod"
     project     = "actions-runner"
     owner       = "phoenixvc"
     cost_center = "infra"
   }
   validation {
-    condition     = contains(keys(var.tags), "environment") && contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
-    error_message = "Mandatory tags missing: environment, project, owner, cost_center."
+    condition     = contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
+    error_message = "Mandatory tags missing: project, owner, cost_center."
   }
 }
 

@@ -201,25 +201,24 @@ jobs:
             exit 0
           fi
 
-          # Immediate scale-down to 0 when queue empty
-          if [ "${SKIP_QUEUE}" != "true" ] && [ "$QUEUED" -eq 0 ]; then
-            echo "SCALE_DOWN=0" >> "$GITHUB_ENV"
-            echo "No queued jobs — will scale to 0"
-            exit 0
-          fi
-
-          # CPU-only path: check average CPU across instances over last 10 min
+          # Check average CPU across instances over last 10 min before deciding scale-down.
+          # Empty AVG_CPU means the metrics lookup failed — skip scale-down in that case.
           AVG_CPU=$(az monitor metrics list \
             --resource "/subscriptions/${{ secrets.ARM_SUBSCRIPTION_ID }}/resourceGroups/$RG/providers/Microsoft.Compute/virtualMachineScaleSets/$VMSS_NAME" \
             --metric "Percentage CPU" \
             --interval PT10M \
             --aggregation Average \
             --query "value[0].timeseries[0].data[-1].average" \
-            -o tsv 2>/dev/null || echo "0")
+            -o tsv 2>/dev/null || echo "")
+
+          if [ -z "$AVG_CPU" ]; then
+            echo "Unable to retrieve CPU metrics — skipping scale-down"
+            exit 0
+          fi
 
           echo "Average CPU: ${AVG_CPU}%"
 
-          # If CPU < 20%, scale down by 1 (min 0). Fallback to 0 (no scale-down) if bc is unavailable.
+          # If CPU < 20%, scale down by 1 (min 0). Fallback to no scale-down if bc is unavailable.
           if [ "$(echo "$AVG_CPU < 20" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
             NEW=$((CURRENT - 1))
             [ "$NEW" -lt 0 ] && NEW=0

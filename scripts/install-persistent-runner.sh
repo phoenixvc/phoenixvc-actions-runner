@@ -29,10 +29,11 @@ VERSION="${RUNNER_VERSION:-2.332.0}"
 # Source conf file if provided as argument
 if [ -n "$1" ] && [ -f "$1" ]; then
   echo "Loading config: $1"
-  # Validate conf file contains only expected variable assignments
-  if grep -qvE '^\s*(#|$|GITHUB_REPO_URL=|RUNNER_NAME=|RUNNER_LABELS=|RUNNER_DIR=)' "$1"; then
-    echo "WARNING: conf file contains unexpected content — review before proceeding:" >&2
-    grep -vE '^\s*(#|$|GITHUB_REPO_URL=|RUNNER_NAME=|RUNNER_LABELS=|RUNNER_DIR=)' "$1" >&2
+  # Validate conf file contains only expected variable assignments (no trailing commands)
+  if grep -qvE '^\s*(#|$|GITHUB_REPO_URL=[^;]*$|RUNNER_NAME=[^;]*$|RUNNER_LABELS=[^;]*$|RUNNER_DIR=[^;]*$)' "$1"; then
+    echo "ERROR: conf file contains unexpected or unsafe content:" >&2
+    grep -nE -v '^\s*(#|$|GITHUB_REPO_URL=[^;]*$|RUNNER_NAME=[^;]*$|RUNNER_LABELS=[^;]*$|RUNNER_DIR=[^;]*$)' "$1" >&2
+    exit 1
   fi
   # shellcheck source=/dev/null
   source "$1"
