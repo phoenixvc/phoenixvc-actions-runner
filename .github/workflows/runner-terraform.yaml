@@ -50,8 +50,19 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
+      - name: Evaluate SP creds presence
+        id: spflag
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -n "${AZURE_CREDENTIALS}" ]; then
+            echo "has_sp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sp=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Azure login (Service Principal fallback)
-        if: ${{ steps.oidc_login.outcome == 'failure' && secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ steps.oidc_login.outcome == 'failure' && steps.spflag.outputs.has_sp == 'true' }}
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
