@@ -9,17 +9,25 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 & gh auth status 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "gh CLI not authenticated. Run 'gh auth login' first." }
-$payload = [pscustomobject]@{
-  required_status_checks = $null
-  enforce_admins = [bool]$EnforceAdmins
-  required_pull_request_reviews = [pscustomobject]@{ required_approving_review_count = $RequiredApprovals }
-  restrictions = $null
-  allow_deletions = $false
-  allow_force_pushes = $false
-} | ConvertTo-Json -Depth 3
+$enforceStr = if ($EnforceAdmins) { "true" } else { "false" }
+$payload = @"
+{
+  "required_status_checks": null,
+  "enforce_admins": $enforceStr,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": $RequiredApprovals
+  },
+  "restrictions": null,
+  "allow_deletions": false,
+  "allow_force_pushes": false
+}
+"@
 $tmp = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(),"branch-protection.json")
-[System.IO.File]::WriteAllText($tmp,$payload,[System.Text.Encoding]::UTF8)
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($tmp,$payload,$utf8NoBom)
 foreach ($b in $Branches) {
+  Write-Host "Setting protection on $b..."
   & gh api -X PUT "repos/$Owner/$Repo/branches/$b/protection" --input $tmp
+  if ($LASTEXITCODE -ne 0) { throw "Failed to set protection on $b" }
 }
 Write-Host "Branch protection applied to: $($Branches -join ', ')"
