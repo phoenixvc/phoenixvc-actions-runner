@@ -58,7 +58,7 @@ variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
   validation {
-    condition = contains(keys(var.tags), "environment") && contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
+    condition     = contains(keys(var.tags), "environment") && contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
     error_message = "Mandatory tags missing: environment, project, owner, cost_center."
   }
 }
