@@ -10,14 +10,17 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 az account show -o none | Out-Null
+if ($LASTEXITCODE -ne 0) { Write-Error "az account show failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
 if ([string]::IsNullOrWhiteSpace($AppClientId) -and [string]::IsNullOrWhiteSpace($AppDisplayName) -and $env:AZURE_CREDENTIALS) {
   try { $AppClientId = (ConvertFrom-Json -InputObject $env:AZURE_CREDENTIALS).clientId } catch {}
 }
 if ([string]::IsNullOrWhiteSpace($AppClientId) -and -not [string]::IsNullOrWhiteSpace($AppDisplayName)) {
   $AppClientId = az ad app list --filter "displayName eq '$AppDisplayName'" --query "[0].appId" -o tsv
+  if ($LASTEXITCODE -ne 0) { Write-Error "az ad app list failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
 }
 if ([string]::IsNullOrWhiteSpace($AppClientId)) { throw "AppClientId not provided and could not be resolved" }
 $objectId = az ad app show --id $AppClientId --query id -o tsv
+if ($LASTEXITCODE -ne 0) { Write-Error "az ad app show failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
 if ([string]::IsNullOrWhiteSpace($objectId)) { throw "Unable to resolve App Object ID from AppClientId" }
 $payload = @{
   name        = $CredentialName
@@ -26,7 +29,15 @@ $payload = @{
   description = $Description
   audiences   = @($Audience)
 } | ConvertTo-Json -Depth 3
+
 $tmp = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "fid-$($CredentialName).json")
-[System.IO.File]::WriteAllText($tmp, $payload, [System.Text.Encoding]::UTF8)
-az ad app federated-credential create --id $objectId --parameters $tmp
-az ad app federated-credential list --id $objectId -o table
+try {
+  [System.IO.File]::WriteAllText($tmp, $payload, [System.Text.Encoding]::UTF8)
+  az ad app federated-credential create --id $objectId --parameters $tmp
+  if ($LASTEXITCODE -ne 0) { Write-Error "az ad app federated-credential create failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+  az ad app federated-credential list --id $objectId -o table
+  if ($LASTEXITCODE -ne 0) { Write-Error "az ad app federated-credential list failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+}
+finally {
+  Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+}

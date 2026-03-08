@@ -1,7 +1,7 @@
 param(
   [string]$Owner = "phoenixvc",
   [string]$Repo = "phoenixvc-actions-runner",
-  [string[]]$Branches = @("dev","main"),
+  [string[]]$Branches = @("dev", "main"),
   [int]$RequiredApprovals = 0,
   [switch]$EnforceAdmins
 )
@@ -16,7 +16,8 @@ if ($RequiredApprovals -gt 0) {
     "required_approving_review_count": $RequiredApprovals
   },
 "@
-} else {
+}
+else {
   $reviewBlock = "  `"required_pull_request_reviews`": null,"
 }
 $payload = @"
@@ -29,12 +30,18 @@ $reviewBlock
   "allow_force_pushes": false
 }
 "@
-$tmp = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(),"branch-protection.json")
+
+$tmp = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "branch-protection-$([System.Guid]::NewGuid()).json")
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllText($tmp,$payload,$utf8NoBom)
-foreach ($b in $Branches) {
-  Write-Host "Setting protection on $b..."
-  & gh api -X PUT "repos/$Owner/$Repo/branches/$b/protection" --input $tmp
-  if ($LASTEXITCODE -ne 0) { throw "Failed to set protection on $b" }
+try {
+  [System.IO.File]::WriteAllText($tmp, $payload, $utf8NoBom)
+  foreach ($b in $Branches) {
+    Write-Host "Setting protection on $b..."
+    & gh api -X PUT "repos/$Owner/$Repo/branches/$b/protection" --input $tmp
+    if ($LASTEXITCODE -ne 0) { throw "Failed to set protection on $b" }
+  }
+  Write-Host "Branch protection applied to: $($Branches -join ', ')"
 }
-Write-Host "Branch protection applied to: $($Branches -join ', ')"
+finally {
+  Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+}
