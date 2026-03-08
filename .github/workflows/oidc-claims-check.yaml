@@ -23,6 +23,7 @@ jobs:
       - name: Print decoded claims
         run: |
           TOK="${{ steps.id.outputs.token }}"
+          echo "::add-mask::$TOK"
           PAY=$(echo "$TOK" | cut -d . -f 2 | base64 -d 2>/dev/null || echo "{}")
           echo "$PAY" | jq .
           echo "Subject: $(echo "$PAY" | jq -r '.sub')"

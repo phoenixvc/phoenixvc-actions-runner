@@ -8,26 +8,41 @@ param(
   [string]$RunnerSSHPublicKey,
   [string]$AzureCredentialsJson,
   [string]$RunnerResourceGroupName,
-  [string]$RunnerLocation
+  [string]$RunnerLocation,
+  [string]$RunnerTags,
+  [string]$RunnerAlertEmail
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 & gh auth status 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "gh CLI not authenticated. Run 'gh auth login' first." }
-if ($ARMClientId) { & gh secret set ARM_CLIENT_ID -R "$Owner/$Repo" --body "$ARMClientId" }
-if ($ARMClientId -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set ARM_CLIENT_ID failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($ARMTenantId) { & gh secret set ARM_TENANT_ID -R "$Owner/$Repo" --body "$ARMTenantId" }
-if ($ARMTenantId -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set ARM_TENANT_ID failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($ARMSubscriptionId) { & gh secret set ARM_SUBSCRIPTION_ID -R "$Owner/$Repo" --body "$ARMSubscriptionId" }
-if ($ARMSubscriptionId -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set ARM_SUBSCRIPTION_ID failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($RunnerSubnetId) { & gh secret set RUNNER_SUBNET_ID -R "$Owner/$Repo" --body "$RunnerSubnetId" }
-if ($RunnerSubnetId -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set RUNNER_SUBNET_ID failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($RunnerSSHPublicKey) { & gh secret set RUNNER_SSH_PUBLIC_KEY -R "$Owner/$Repo" --body "$RunnerSSHPublicKey" }
-if ($RunnerSSHPublicKey -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set RUNNER_SSH_PUBLIC_KEY failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($AzureCredentialsJson) { & gh secret set AZURE_CREDENTIALS -R "$Owner/$Repo" --body "$AzureCredentialsJson" }
-if ($AzureCredentialsJson -and $LASTEXITCODE -ne 0) { Write-Error "gh secret set AZURE_CREDENTIALS failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($RunnerResourceGroupName) { & gh variable set RUNNER_RESOURCE_GROUP_NAME -R "$Owner/$Repo" --value "$RunnerResourceGroupName" }
-if ($RunnerResourceGroupName -and $LASTEXITCODE -ne 0) { Write-Error "gh variable set RUNNER_RESOURCE_GROUP_NAME failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
-if ($RunnerLocation) { & gh variable set RUNNER_LOCATION -R "$Owner/$Repo" --value "$RunnerLocation" }
-if ($RunnerLocation -and $LASTEXITCODE -ne 0) { Write-Error "gh variable set RUNNER_LOCATION failed ($LASTEXITCODE)"; exit $LASTEXITCODE }
+
+function Set-GitHubSecret([string]$Name, [string]$Value, [bool]$Optional = $false) {
+  if (-not $Value) {
+    if (-not $Optional) { throw "Required secret $Name is missing" }
+    return
+  }
+  & gh secret set $Name -R "$Owner/$Repo" --body "$Value"
+  if ($LASTEXITCODE -ne 0) { throw "gh secret set $Name failed ($LASTEXITCODE)" }
+}
+
+function Set-GitHubVariable([string]$Name, [string]$Value, [bool]$Optional = $false) {
+  if (-not $Value) {
+    if (-not $Optional) { throw "Required variable $Name is missing" }
+    return
+  }
+  & gh variable set $Name -R "$Owner/$Repo" --value "$Value"
+  if ($LASTEXITCODE -ne 0) { throw "gh variable set $Name failed ($LASTEXITCODE)" }
+}
+
+Set-GitHubSecret "ARM_CLIENT_ID" $ARMClientId
+Set-GitHubSecret "ARM_TENANT_ID" $ARMTenantId
+Set-GitHubSecret "ARM_SUBSCRIPTION_ID" $ARMSubscriptionId
+Set-GitHubSecret "RUNNER_SUBNET_ID" $RunnerSubnetId
+Set-GitHubSecret "RUNNER_SSH_PUBLIC_KEY" $RunnerSSHPublicKey
+Set-GitHubSecret "AZURE_CREDENTIALS" $AzureCredentialsJson -Optional $true
+Set-GitHubVariable "RUNNER_RESOURCE_GROUP_NAME" $RunnerResourceGroupName
+Set-GitHubVariable "RUNNER_LOCATION" $RunnerLocation
+Set-GitHubVariable "RUNNER_TAGS" $RunnerTags -Optional $true
+Set-GitHubVariable "RUNNER_ALERT_EMAIL" $RunnerAlertEmail -Optional $true
 Write-Host "Secrets and variables updated on $Owner/$Repo"

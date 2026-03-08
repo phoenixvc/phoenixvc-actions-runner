@@ -52,10 +52,12 @@ jobs:
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
       - name: Check runner services on listener VM
+        env:
+          LISTENER_VM: ${{ vars.RUNNER_LISTENER_VM_NAME || 'prod-runner-listener' }}
         run: |
           az vm run-command invoke \
             -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
-            -n prod-runner-listener \
+            -n "$LISTENER_VM" \
             --command-id RunShellScript \
             --parameters "${{ steps.queue.outputs.count }}" \
             --scripts '
