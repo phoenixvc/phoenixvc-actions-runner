@@ -32,7 +32,6 @@ jobs:
       TF_VAR_runner_subnet_id: ${{ secrets.RUNNER_SUBNET_ID }}
       TF_VAR_ssh_public_key: ${{ secrets.RUNNER_SSH_PUBLIC_KEY }}
       TF_VAR_alert_email: ${{ vars.RUNNER_ALERT_EMAIL }}
-      TF_VAR_ubuntu_image_version: ${{ vars.RUNNER_UBUNTU_IMAGE_VERSION }}
 
     defaults:
       run:
@@ -48,6 +47,11 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Set Ubuntu image version if provided
+        if: ${{ vars.RUNNER_UBUNTU_IMAGE_VERSION != '' }}
+        run: |
+          echo "TF_VAR_ubuntu_image_version=${{ vars.RUNNER_UBUNTU_IMAGE_VERSION }}" >> "$GITHUB_ENV"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd

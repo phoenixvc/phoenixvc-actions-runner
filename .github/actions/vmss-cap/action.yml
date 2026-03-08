@@ -17,5 +17,14 @@ runs:
         RG: ${{ inputs.resource_group_name }}
         AS: ${{ inputs.autoscale_setting_name }}
       run: |
-        MAX=$(az monitor autoscale show -g "$RG" -n "$AS" --query "profiles[0].capacity.maximum" -o tsv)
+        set -e
+        OUT=$(az monitor autoscale show -g "$RG" -n "$AS" --query "profiles[0].capacity.maximum" -o tsv 2>&1) || {
+          echo "Failed to retrieve autoscale maximum: $OUT" >&2
+          exit 1
+        }
+        MAX="$OUT"
+        if [ -z "$MAX" ]; then
+          echo "Autoscale maximum is empty for $AS in $RG" >&2
+          exit 1
+        fi
         echo "max=$MAX" >> "$GITHUB_OUTPUT"

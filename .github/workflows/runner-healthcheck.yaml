@@ -16,12 +16,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (runners.d configs)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          sparse-checkout: runners.d
+
       - name: Get queued job count
         id: queue
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RUNNER_GITHUB_PAT }}
         run: |
-          COUNT=$(curl -s -H "authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=queued&per_page=100" | jq '.total_count // 0')
+          COUNT=0
+          if [ -z "$GH_TOKEN" ]; then
+            COUNT=$(curl -s -H "authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=queued&per_page=100" | jq '.total_count // 0')
+            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ORG_QUEUED=$(gh api "/orgs/phoenixvc/actions/runs?status=queued&per_page=100" --jq '.total_count' 2>/dev/null || echo "0")
+          COUNT=$((COUNT + ORG_QUEUED))
+          for conf in runners.d/*.conf; do
+            [ -f "$conf" ] || continue
+            REPO_URL=$(grep -oP 'GITHUB_REPO_URL=\K.*' "$conf" 2>/dev/null || true)
+            [ -z "$REPO_URL" ] && continue
+            REPO=$(echo "$REPO_URL" | sed 's|https://github.com/||')
+            RQ=$(gh api "/repos/$REPO/actions/runs?status=queued&per_page=100" --jq '.total_count' 2>/dev/null || echo "0")
+            COUNT=$((COUNT + RQ))
+          done
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (OIDC)

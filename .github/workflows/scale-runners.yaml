@@ -28,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (local composite actions)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
       - name: Azure login (OIDC)
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
@@ -178,19 +181,19 @@ jobs:
           fi
 
           # --- Scale DOWN if idle ---
-          if [ "$CURRENT" -le 0 ]; then
+          if [ -z "$TARGET" ] && [ "$CURRENT" -le 0 ]; then
             echo "Already at 0, nothing to do"
             exit 0
           fi
 
           # If jobs are queued, don't scale down
-          if [ "$QUEUED" -gt 0 ]; then
+          if [ -z "$TARGET" ] && [ "$QUEUED" -gt 0 ]; then
             echo "Jobs still queued ($QUEUED), keeping $CURRENT instances"
             exit 0
           fi
 
           # Immediate scale-down to 0 when queue empty
-          if [ "${SKIP_QUEUE}" != "true" ] && [ "$QUEUED" -eq 0 ]; then
+          if [ -z "$TARGET" ] && [ "${SKIP_QUEUE}" != "true" ] && [ "$QUEUED" -eq 0 ]; then
             echo "No queued jobs, scaling to 0"
             az vmss scale -g "$RG" -n "$VMSS" --new-capacity 0
             exit 0

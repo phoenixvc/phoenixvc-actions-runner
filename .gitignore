@@ -15,3 +15,6 @@ override.tf.json
 *.key
 *.b64
 terraform/key.*
+ 
+# Local dev settings (do not commit)
+.claude/*.local.json

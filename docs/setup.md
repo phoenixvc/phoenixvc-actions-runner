@@ -453,8 +453,8 @@ Reusable actions under `.github/actions`:
     for explicit capacity changes (manual or automated)
   - **Other writes**: `Microsoft.Compute/virtualMachineScaleSets/write`
     for configuration updates
-- **Health check workflow**: Runs every 15 minutes, auto-restarts
-  failed runner services. Can also be triggered manually.
+- **Health check workflow**: Runs every 15 minutes, auto-restarts failed
+  runner services, and can also be triggered manually.
 - **Test Alerts workflow**: Sends test notifications and prints
   estimated monthly costs for current and minimum capacities.
 

@@ -16,6 +16,9 @@ jobs:
       LISTENER_RATE_USD_B2S: ${{ vars.LISTENER_RATE_USD_B2S }}
       ZAR_PER_USD: ${{ vars.ZAR_PER_USD }}
     steps:
+      - name: Checkout (local composite actions)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
       - name: Azure login (OIDC)
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:

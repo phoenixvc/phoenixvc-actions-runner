@@ -274,8 +274,6 @@ resource "azurerm_monitor_activity_log_alert" "vmss_updates" {
   criteria {
     category       = "Administrative"
     operation_name = "Microsoft.Compute/virtualMachineScaleSets/write"
-    level          = "Informational"
-    status         = "Succeeded"
   }
 
   action {
@@ -295,8 +293,6 @@ resource "azurerm_monitor_activity_log_alert" "vmss_scale" {
   criteria {
     category       = "Administrative"
     operation_name = "Microsoft.Compute/virtualMachineScaleSets/scale/action"
-    level          = "Informational"
-    status         = "Succeeded"
   }
 
   action {
