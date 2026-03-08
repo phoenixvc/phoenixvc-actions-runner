@@ -19,7 +19,8 @@ See [docs/setup.md](docs/setup.md) for full setup.
 ## Structure
 
 ```text
-.github/workflows/  # Runner Terraform CI (OIDC, plan/apply)
+.github/workflows/  # Runner Terraform CI (OIDC, plan/apply), healthcheck, scale, test alerts
+.github/actions/    # Reusable composite actions (cost guard, VMSS cap)
 terraform/          # Listener VM + VMSS + NSG (deploys into existing subnet)
 scripts/            # Install scripts for listener VM
 docs/               # Setup guide
@@ -33,6 +34,24 @@ renovate.json       # Dependency update config (Terraform + GH Actions)
 - Use `terraform/write-key.sh` with the `B64KEY` environment variable to deploy the GitHub App private key to the listener VM.
 - SSH access to the listener VM is restricted via the `admin_cidr` Terraform variable (default: Azure health probe only).
 
+## Workflows
+
+- Runner Terraform: plans/applies infra via OIDC, pinned actions.
+- Runner Health Check: checks service liveness and restarts stalled listeners when jobs are queued.
+- Scale Runners: manual scale and scheduled auto-scale with budget guard and dynamic autoscale cap retrieval.
+- Test Alerts: sends test notifications and prints estimated monthly costs (current/minimum).
+
+## Alerts
+
+- Listener VM unavailability (>30 min): Sev 1 metric alert to action group.
+- VMSS updates (capacity and writes): Activity Log alert to action group.
+- Budget guard: test notification when estimated monthly cost exceeds configurable budget.
+
 ## Cost
 
-~R300-370/month (listener B1ms + VMSS pay-per-use)
+- Rates are configurable via repository variables:
+  - `VMSS_RATE_USD_B1S` (default 0.0104)
+  - `LISTENER_RATE_USD_B2S` (default 0.0416)
+  - `ZAR_PER_USD` (default 19)
+  - `MONTHLY_BUDGET_ZAR` (default 1000)
+- Estimates use 720 hours/month and include the listener VM + VMSS capacity.

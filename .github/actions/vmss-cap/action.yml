@@ -1,0 +1,30 @@
+name: VMSS Cap
+description: Retrieve VMSS autoscale maximum capacity
+inputs:
+  resource_group_name:
+    required: true
+  autoscale_setting_name:
+    required: true
+outputs:
+  max:
+    value: ${{ steps.get.outputs.max }}
+runs:
+  using: composite
+  steps:
+    - id: get
+      shell: bash
+      env:
+        RG: ${{ inputs.resource_group_name }}
+        AS: ${{ inputs.autoscale_setting_name }}
+      run: |
+        set -e
+        OUT=$(az monitor autoscale show -g "$RG" -n "$AS" --query "profiles[0].capacity.maximum" -o tsv 2>&1) || {
+          echo "Failed to retrieve autoscale maximum: $OUT" >&2
+          exit 1
+        }
+        MAX="$OUT"
+        if [ -z "$MAX" ]; then
+          echo "Autoscale maximum is empty for $AS in $RG" >&2
+          exit 1
+        fi
+        echo "max=$MAX" >> "$GITHUB_OUTPUT"

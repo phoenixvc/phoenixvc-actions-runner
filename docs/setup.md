@@ -390,11 +390,11 @@ HouseOfVeritas) can use it.
 
 This repo includes three GitHub Actions workflows:
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| **Runner Terraform** | `workflow_dispatch` | Plan/apply Terraform (VM, VMSS, autoscale, alerts) |
-| **Runner Health Check** | Every 15 min + `workflow_dispatch` | Checks all runner services on listener VM, auto-restarts any that are down |
-| **Scale Runners** | `workflow_dispatch` + every 30 min | On-demand VMSS burst (`capacity=1-4`), auto-scale based on queued jobs + CPU |
+| Workflow                | Trigger                            | Purpose                                                                      |
+| ----------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| **Runner Terraform**    | `workflow_dispatch`                | Plan/apply Terraform (VM, VMSS, autoscale, alerts)                           |
+| **Runner Health Check** | Every 15 min + `workflow_dispatch` | Checks all runner services on listener VM, auto-restarts any that are down   |
+| **Scale Runners**       | `workflow_dispatch` + every 30 min | On-demand VMSS burst (`capacity=1-4`), auto-scale based on queued jobs + CPU |
 
 ### VMSS Autoscale
 
@@ -418,14 +418,45 @@ The scheduled job (every 30 min) automatically:
 - **Tapers down** by 1 instance when CPU < 10% and no queued jobs
 - Without `RUNNER_GITHUB_PAT`, falls back to CPU-only scaling
 
+### Budget Guard and Cost Variables
+
+Repository **Variables** control cost estimates and budget checks used by
+the Scale Runners and Test Alerts workflows:
+
+- `VMSS_RATE_USD_B1S` — default `0.0104`
+- `LISTENER_RATE_USD_B2S` — default `0.0416`
+- `ZAR_PER_USD` — default `19`
+- `MONTHLY_BUDGET_ZAR` — default `1000`
+
+Defaults are applied by the shared **Cost Guard** composite action if
+variables are not set. Estimates assume `720` hours/month and include the
+listener VM cost plus VMSS capacity.
+
+### Shared Composite Actions
+
+Reusable actions under `.github/actions`:
+
+- `cost-guard` — computes monthly USD/ZAR estimates and checks budget
+- `vmss-cap` — retrieves autoscale maximum capacity for VMSS
+
 ### Monitoring
 
 - **Azure Monitor alert**: Fires (Sev 1) when the listener VM is
   unavailable for > 30 minutes. Configure notification receivers
   (email, webhook, etc.) on the `prod-runner-alerts` action group in
   the Azure Portal.
-- **Health check workflow**: Runs every 15 minutes, auto-restarts
-  failed runner services. Can also be triggered manually.
+- **Azure Activity Log alert**: Notifies on VMSS update events
+  (`Microsoft.Compute/virtualMachineScaleSets/write`) and attaches the
+  same action group for scale change visibility.
+- Split alerts:
+  - **Scale actions**: `Microsoft.Compute/virtualMachineScaleSets/scale/action`
+    for explicit capacity changes (manual or automated)
+  - **Other writes**: `Microsoft.Compute/virtualMachineScaleSets/write`
+    for configuration updates
+- **Health check workflow**: Runs every 15 minutes, auto-restarts failed
+  runner services, and can also be triggered manually.
+- **Test Alerts workflow**: Sends test notifications and prints
+  estimated monthly costs for current and minimum capacities.
 
 ### Swap
 

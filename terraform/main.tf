@@ -97,7 +97,7 @@ resource "azurerm_linux_virtual_machine" "listener" {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
     sku       = "22_04-lts"
-    version   = "latest"
+    version   = var.ubuntu_image_version
   }
 
   identity {
@@ -133,7 +133,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "phoenixvc" {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
     sku       = "22_04-lts"
-    version   = "latest"
+    version   = var.ubuntu_image_version
   }
 
   os_disk {
@@ -230,6 +230,15 @@ resource "azurerm_monitor_action_group" "runner_alerts" {
   short_name          = "RunnerAlert"
 
   tags = var.tags
+
+  dynamic "email_receiver" {
+    for_each = concat(var.alert_emails, var.alert_email == "" ? [] : [var.alert_email])
+    content {
+      name                    = "email-${replace(email_receiver.value, "@", "-")}"
+      email_address           = email_receiver.value
+      use_common_alert_schema = true
+    }
+  }
 }
 
 resource "azurerm_monitor_metric_alert" "listener_vm_unavailable" {
@@ -246,6 +255,44 @@ resource "azurerm_monitor_metric_alert" "listener_vm_unavailable" {
     aggregation      = "Average"
     operator         = "LessThan"
     threshold        = 1
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.runner_alerts.id
+  }
+
+  tags = var.tags
+}
+
+# --- Azure Activity Log Alert: notify on VMSS updates ---
+resource "azurerm_monitor_activity_log_alert" "vmss_updates" {
+  name                = "${var.environment}-vmss-updates-alert"
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_linux_virtual_machine_scale_set.phoenixvc.id]
+  description         = "Alert on VMSS write operations (capacity changes and updates)"
+
+  criteria {
+    category       = "Administrative"
+    operation_name = "Microsoft.Compute/virtualMachineScaleSets/write"
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.runner_alerts.id
+  }
+
+  tags = var.tags
+}
+
+# --- Azure Activity Log Alert: notify on VMSS scale actions ---
+resource "azurerm_monitor_activity_log_alert" "vmss_scale" {
+  name                = "${var.environment}-vmss-scale-alert"
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_linux_virtual_machine_scale_set.phoenixvc.id]
+  description         = "Alert on VMSS scale actions (manual or automated capacity changes)"
+
+  criteria {
+    category       = "Administrative"
+    operation_name = "Microsoft.Compute/virtualMachineScaleSets/scale/action"
   }
 
   action {

@@ -28,12 +28,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (local composite actions)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Get autoscale maximum
+        id: cap
+        uses: ./.github/actions/vmss-cap
+        with:
+          resource_group_name: ${{ vars.RUNNER_RESOURCE_GROUP_NAME }}
+          autoscale_setting_name: prod-runner-vmss-autoscale
+
+      - name: Validate capacity cap
+        run: |
+          MAX="${{ steps.cap.outputs.max }}"
+          REQ="${{ github.event.inputs.capacity }}"
+          if [ -z "$MAX" ]; then
+            echo "Unable to retrieve autoscale maximum"
+            exit 1
+          fi
+          if [ "$REQ" -gt "$MAX" ]; then
+            echo "Requested capacity $REQ exceeds maximum $MAX"
+            exit 1
+          fi
+
+      - name: Budget check before scale-up
+        id: budget
+        uses: ./.github/actions/cost-guard
+        with:
+          capacity: ${{ github.event.inputs.capacity }}
+          vmss_rate_usd_b1s: ${{ vars.VMSS_RATE_USD_B1S }}
+          listener_rate_usd_b2s: ${{ vars.LISTENER_RATE_USD_B2S }}
+          zar_per_usd: ${{ vars.ZAR_PER_USD }}
+          monthly_budget_zar: ${{ vars.MONTHLY_BUDGET_ZAR }}
+          hours: 720
+
+      - name: Enforce budget
+        run: |
+          EX="${{ steps.budget.outputs.exceeded }}"
+          if [ "$EX" = "1" ]; then
+            echo "Budget threshold exceeded — aborting scale-up"
+            az monitor action-group test-notifications create \
+              --resource-group "${{ vars.RUNNER_RESOURCE_GROUP_NAME }}" \
+              --action-group-name "prod-runner-alerts" \
+              --alert-type budget
+            exit 1
+          fi
+          echo "Estimated monthly cost: USD=${{ steps.budget.outputs.usd_estimate }} ZAR=${{ steps.budget.outputs.zar_estimate }}"
 
       - name: Scale up VMSS
         run: |
@@ -43,6 +90,13 @@ jobs:
             --new-capacity ${{ github.event.inputs.capacity }}
           echo "Scaled VMSS to ${{ github.event.inputs.capacity }} instances"
 
+      - name: Send scale-up alert
+        run: |
+          az monitor action-group test-notifications create \
+            --resource-group "${{ vars.RUNNER_RESOURCE_GROUP_NAME }}" \
+            --action-group-name "prod-runner-alerts" \
+            --alert-type activitylog
+
   auto-scale:
     name: Auto-scale VMSS (queued jobs + CPU)
     if: github.event_name == 'schedule'
@@ -50,7 +104,7 @@ jobs:
 
     steps:
       - name: Checkout (for runners.d configs)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           sparse-checkout: runners.d
 
@@ -92,11 +146,18 @@ jobs:
           echo "skip_queue_check=false" >> "$GITHUB_OUTPUT"
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Get autoscale maximum
+        id: cap
+        uses: ./.github/actions/vmss-cap
+        with:
+          resource_group_name: ${{ vars.RUNNER_RESOURCE_GROUP_NAME }}
+          autoscale_setting_name: prod-runner-vmss-autoscale
 
       - name: Auto-scale VMSS
         env:
@@ -105,6 +166,7 @@ jobs:
         run: |
           RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
           VMSS="prod-runner-phoenixvc-vmss"
+          MAX="${{ steps.cap.outputs.max }}"
 
           CURRENT=$(az vmss show -g "$RG" -n "$VMSS" --query "sku.capacity" -o tsv)
           echo "Current capacity: $CURRENT"
@@ -112,23 +174,28 @@ jobs:
 
           # --- Scale UP if jobs are queued and capacity is insufficient ---
           if [ "$QUEUED" -gt 0 ] && [ "$CURRENT" -lt "$QUEUED" ]; then
-            # Scale to match queued jobs, capped at 4
             TARGET=$QUEUED
-            [ "$TARGET" -gt 4 ] && TARGET=4
-            echo "Queued jobs ($QUEUED) > current capacity ($CURRENT) — scaling to $TARGET"
-            az vmss scale -g "$RG" -n "$VMSS" --new-capacity "$TARGET"
-            exit 0
+            [ -n "$MAX" ] && [ "$TARGET" -gt "$MAX" ] && TARGET="$MAX"
+            echo "TARGET=$TARGET" >> "$GITHUB_ENV"
+            echo "Queued jobs ($QUEUED) > current capacity ($CURRENT) — target $TARGET"
           fi
 
           # --- Scale DOWN if idle ---
-          if [ "$CURRENT" -le 0 ]; then
+          if [ -z "$TARGET" ] && [ "$CURRENT" -le 0 ]; then
             echo "Already at 0, nothing to do"
             exit 0
           fi
 
           # If jobs are queued, don't scale down
-          if [ "$QUEUED" -gt 0 ]; then
+          if [ -z "$TARGET" ] && [ "$QUEUED" -gt 0 ]; then
             echo "Jobs still queued ($QUEUED), keeping $CURRENT instances"
+            exit 0
+          fi
+
+          # Immediate scale-down to 0 when queue empty
+          if [ -z "$TARGET" ] && [ "${SKIP_QUEUE}" != "true" ] && [ "$QUEUED" -eq 0 ]; then
+            echo "No queued jobs, scaling to 0"
+            az vmss scale -g "$RG" -n "$VMSS" --new-capacity 0
             exit 0
           fi
 
@@ -143,8 +210,8 @@ jobs:
 
           echo "Average CPU: ${AVG_CPU}%"
 
-          # If CPU < 10%, scale down by 1 (min 0)
-          if [ "$(echo "$AVG_CPU < 10" | bc -l 2>/dev/null || echo 1)" = "1" ]; then
+          # If CPU < 20%, scale down by 1 (min 0)
+          if [ "$(echo "$AVG_CPU < 20" | bc -l 2>/dev/null || echo 1)" = "1" ]; then
             NEW=$((CURRENT - 1))
             [ "$NEW" -lt 0 ] && NEW=0
             echo "Low utilization — scaling from $CURRENT to $NEW"
@@ -152,3 +219,31 @@ jobs:
           else
             echo "CPU above threshold, keeping $CURRENT instances"
           fi
+      - name: Budget check for target
+        if: env.TARGET != ''
+        id: budget
+        uses: ./.github/actions/cost-guard
+        with:
+          capacity: ${{ env.TARGET }}
+          vmss_rate_usd_b1s: ${{ vars.VMSS_RATE_USD_B1S }}
+          listener_rate_usd_b2s: ${{ vars.LISTENER_RATE_USD_B2S }}
+          zar_per_usd: ${{ vars.ZAR_PER_USD }}
+          monthly_budget_zar: ${{ vars.MONTHLY_BUDGET_ZAR }}
+          hours: 720
+
+      - name: Enforce budget and scale to target
+        if: env.TARGET != ''
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          VMSS="prod-runner-phoenixvc-vmss"
+          EX="${{ steps.budget.outputs.exceeded }}"
+          if [ "$EX" = "1" ]; then
+            echo "Budget threshold exceeded — skipping scale-up"
+            az monitor action-group test-notifications create \
+              --resource-group "$RG" \
+              --action-group-name "prod-runner-alerts" \
+              --alert-type budget
+            exit 0
+          fi
+          echo "Estimated monthly cost at target ${{ env.TARGET }}: USD=${{ steps.budget.outputs.usd_estimate }} ZAR=${{ steps.budget.outputs.zar_estimate }}"
+          az vmss scale -g "$RG" -n "$VMSS" --new-capacity "${{ env.TARGET }}"

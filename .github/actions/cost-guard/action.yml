@@ -1,0 +1,51 @@
+name: Cost Guard
+description: Estimate monthly cost and check budget
+inputs:
+  capacity:
+    required: true
+  vmss_rate_usd_b1s:
+    required: false
+    default: "0.0104"
+  listener_rate_usd_b2s:
+    required: false
+    default: "0.0416"
+  zar_per_usd:
+    required: false
+    default: "19"
+  monthly_budget_zar:
+    required: false
+    default: "1000"
+  hours:
+    required: false
+    default: "720"
+outputs:
+  usd_estimate:
+    value: ${{ steps.calc.outputs.usd }}
+  zar_estimate:
+    value: ${{ steps.calc.outputs.zar }}
+  exceeded:
+    value: ${{ steps.calc.outputs.exceeded }}
+runs:
+  using: composite
+  steps:
+    - id: calc
+      shell: bash
+      env:
+        CAPACITY: ${{ inputs.capacity }}
+        VMSS_RATE_IN: ${{ inputs.vmss_rate_usd_b1s }}
+        LISTENER_RATE_IN: ${{ inputs.listener_rate_usd_b2s }}
+        FX_IN: ${{ inputs.zar_per_usd }}
+        BUDGET_IN: ${{ inputs.monthly_budget_zar }}
+        HOURS_IN: ${{ inputs.hours }}
+      run: |
+        VMSS_RATE="${VMSS_RATE_IN:-0.0104}"
+        LISTENER_RATE="${LISTENER_RATE_IN:-0.0416}"
+        FX="${FX_IN:-19}"
+        BUDGET="${BUDGET_IN:-1000}"
+        HOURS="${HOURS_IN:-720}"
+        USD=$(echo "$CAPACITY*$VMSS_RATE*$HOURS + $LISTENER_RATE*$HOURS" | bc -l)
+        ZAR=$(echo "$USD*$FX" | bc -l)
+        EXCEEDED=$(echo "$ZAR>$BUDGET" | bc -l)
+        echo "usd=$USD" >> "$GITHUB_OUTPUT"
+        echo "zar=$ZAR" >> "$GITHUB_OUTPUT"
+        echo "exceeded=$EXCEEDED" >> "$GITHUB_OUTPUT"
