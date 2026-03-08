@@ -1,0 +1,67 @@
+name: Test Alerts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  send-test:
+    name: Send test notifications to action group
+    runs-on: ubuntu-latest
+    env:
+      VMSS_RATE_USD_B1S: ${{ vars.VMSS_RATE_USD_B1S }}
+      LISTENER_RATE_USD_B2S: ${{ vars.LISTENER_RATE_USD_B2S }}
+      ZAR_PER_USD: ${{ vars.ZAR_PER_USD }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Get current capacity
+        id: cap
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          VMSS="prod-runner-phoenixvc-vmss"
+          CURRENT=$(az vmss show -g "$RG" -n "$VMSS" --query "sku.capacity" -o tsv || echo "0")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      - name: Estimate cost at current
+        id: cost_current
+        uses: ./.github/actions/cost-guard
+        with:
+          capacity: ${{ steps.cap.outputs.current }}
+          vmss_rate_usd_b1s: ${{ vars.VMSS_RATE_USD_B1S }}
+          listener_rate_usd_b2s: ${{ vars.LISTENER_RATE_USD_B2S }}
+          zar_per_usd: ${{ vars.ZAR_PER_USD }}
+          monthly_budget_zar: ${{ vars.MONTHLY_BUDGET_ZAR }}
+          hours: 720
+
+      - name: Estimate cost at minimum
+        id: cost_min
+        uses: ./.github/actions/cost-guard
+        with:
+          capacity: 0
+          vmss_rate_usd_b1s: ${{ vars.VMSS_RATE_USD_B1S }}
+          listener_rate_usd_b2s: ${{ vars.LISTENER_RATE_USD_B2S }}
+          zar_per_usd: ${{ vars.ZAR_PER_USD }}
+          monthly_budget_zar: ${{ vars.MONTHLY_BUDGET_ZAR }}
+          hours: 720
+
+      - name: Print estimates
+        run: |
+          echo "Current capacity: ${{ steps.cap.outputs.current }}"
+          echo "Estimated monthly cost — current: USD=${{ steps.cost_current.outputs.usd_estimate }} ZAR=${{ steps.cost_current.outputs.zar_estimate }}"
+          echo "Estimated monthly cost — minimum: USD=${{ steps.cost_min.outputs.usd_estimate }} ZAR=${{ steps.cost_min.outputs.zar_estimate }}"
+
+      - name: Trigger test notifications
+        run: |
+          az monitor action-group test-notifications create \
+            --resource-group "${{ vars.RUNNER_RESOURCE_GROUP_NAME }}" \
+            --action-group-name "prod-runner-alerts" \
+            --alert-type metricstaticthreshold

@@ -8,6 +8,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 jobs:
   healthcheck:
@@ -15,8 +16,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Get queued job count
+        id: queue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COUNT=$(curl -s -H "authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=queued&per_page=100" | jq '.total_count // 0')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
@@ -28,8 +37,10 @@ jobs:
             -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
             -n prod-runner-listener \
             --command-id RunShellScript \
+            --parameters "${{ steps.queue.outputs.count }}" \
             --scripts '
               FAILED=0
+              QUEUED="$1"
               for svc in /etc/systemd/system/actions.runner.*.service; do
                 [ -f "$svc" ] || continue
                 NAME=$(basename "$svc")
@@ -44,7 +55,20 @@ jobs:
                     FAILED=$((FAILED + 1))
                   fi
                 else
-                  echo "$NAME is running"
+                  LAST_JOB=$(journalctl -u "$NAME" --since "15 min ago" --no-pager | grep -c "Running job:" || echo "0")
+                  if [ "$LAST_JOB" -eq 0 ] && [ "${QUEUED:-0}" -gt 0 ]; then
+                    echo "$NAME has no recent activity and jobs are queued — restarting..."
+                    sudo systemctl restart "$NAME"
+                    sleep 3
+                    if systemctl is-active --quiet "$NAME"; then
+                      echo "$NAME restarted due to inactivity"
+                    else
+                      echo "FAILED to restart $NAME"
+                      FAILED=$((FAILED + 1))
+                    fi
+                  else
+                    echo "$NAME is running"
+                  fi
                 fi
               done
               echo "---"

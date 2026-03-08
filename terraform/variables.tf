@@ -58,4 +58,26 @@ variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
   default     = {}
+  validation {
+    condition = contains(keys(var.tags), "environment") && contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
+    error_message = "Mandatory tags missing: environment, project, owner, cost_center."
+  }
+}
+
+variable "alert_email" {
+  description = "Email receiver for alert action group"
+  type        = string
+  default     = ""
+}
+
+variable "alert_emails" {
+  description = "Email receivers for alert action group"
+  type        = list(string)
+  default     = ["smit.jurie@gmail.com", "eben@phoenixvc.tech"]
+}
+
+variable "ubuntu_image_version" {
+  description = "Ubuntu image version for listener VM and VMSS"
+  type        = string
+  default     = "latest"
 }
