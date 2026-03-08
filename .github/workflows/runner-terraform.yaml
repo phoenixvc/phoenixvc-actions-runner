@@ -32,6 +32,7 @@ jobs:
       TF_VAR_runner_subnet_id: ${{ secrets.RUNNER_SUBNET_ID }}
       TF_VAR_ssh_public_key: ${{ secrets.RUNNER_SSH_PUBLIC_KEY }}
       TF_VAR_alert_email: ${{ vars.RUNNER_ALERT_EMAIL }}
+      TF_VAR_tags: ${{ vars.RUNNER_TAGS }}
 
     defaults:
       run:
