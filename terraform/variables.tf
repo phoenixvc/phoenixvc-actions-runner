@@ -49,14 +49,20 @@ variable "runner_version" {
 }
 
 variable "admin_cidr" {
-  description = "CIDR allowed to SSH into the listener VM (e.g. your public IP /32)"
+  description = "CIDR allowed to SSH into the listener VM (e.g. your public IP /32). Default is Azure health probe only — SSH is effectively blocked until you set this to your IP."
   type        = string
   default     = "168.63.129.16/32"
 }
 
 variable "tags" {
-  description = "Tags to apply to resources"
+  description = "Tags to apply to resources (must include: environment, project, owner, cost_center)"
   type        = map(string)
+  default = {
+    environment = "prod"
+    project     = "actions-runner"
+    owner       = "phoenixvc"
+    cost_center = "infra"
+  }
   validation {
     condition     = contains(keys(var.tags), "environment") && contains(keys(var.tags), "project") && contains(keys(var.tags), "owner") && contains(keys(var.tags), "cost_center")
     error_message = "Mandatory tags missing: environment, project, owner, cost_center."

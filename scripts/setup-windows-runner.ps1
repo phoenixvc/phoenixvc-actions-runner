@@ -15,7 +15,11 @@ param(
     [string]$RunnerName    = "agentkit-forge-win",
     [string]$RunnerDir     = "\actions-runner",
     [string]$RepoUrl       = "https://github.com/JustAGhosT/agentkit-forge",
-    [string]$Labels        = "self-hosted,windows,x64"
+    [string]$Labels        = "self-hosted,windows,x64",
+    # SHA256 hash for the runner zip. Default matches v2.332.0.
+    # When overriding RunnerVersion, set this to the matching hash from
+    # https://github.com/actions/runner/releases or use "" to skip verification.
+    [string]$ExpectedHash  = "83E56E05B21EB58C9697F82E52C53B30867335FF039CD5D44D1A1A24D2149F4B"
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +32,6 @@ if (-not $Token) {
 
 $ZipName    = "actions-runner-win-x64-${RunnerVersion}.zip"
 $DownloadUrl = "https://github.com/actions/runner/releases/download/v${RunnerVersion}/${ZipName}"
-$ExpectedHash = "83E56E05B21EB58C9697F82E52C53B30867335FF039CD5D44D1A1A24D2149F4B"
 
 # Create runner directory under drive root (recommended by GitHub)
 Write-Host "Creating runner directory: $RunnerDir"
@@ -42,14 +45,18 @@ Write-Host "Downloading actions-runner v${RunnerVersion}..."
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipName
 
 # Validate checksum
-Write-Host "Validating SHA256 hash..."
-$ActualHash = (Get-FileHash -Path $ZipName -Algorithm SHA256).Hash.ToUpper()
-if ($ActualHash -ne $ExpectedHash) {
-    Remove-Item $ZipName -Force
-    Write-Error "Checksum mismatch! Expected: $ExpectedHash  Got: $ActualHash"
-    exit 1
+if ($ExpectedHash) {
+    Write-Host "Validating SHA256 hash..."
+    $ActualHash = (Get-FileHash -Path $ZipName -Algorithm SHA256).Hash.ToUpper()
+    if ($ActualHash -ne $ExpectedHash.ToUpper()) {
+        Remove-Item $ZipName -Force
+        Write-Error "Checksum mismatch! Expected: $ExpectedHash  Got: $ActualHash"
+        exit 1
+    }
+    Write-Host "Checksum OK."
+} else {
+    Write-Warning "Hash verification skipped (ExpectedHash not provided)."
 }
-Write-Host "Checksum OK."
 
 # Extract
 Write-Host "Extracting runner..."
