@@ -35,7 +35,7 @@ if [ -n "$1" ] && [ -f "$1" ]; then
   # alphanumerics plus a small set of punctuation: dot, dash, underscore,
   # colon, slash, at-sign, percent, plus and comma.  This rejects `$`, backticks,
   # pipes, ampersands and newlines.
-  SAFE='[A-Za-z0-9._\-:/@%+,]+'
+  SAFE='[A-Za-z0-9._:/@%+,=-]+'
   if grep -qvE "^\s*(#|$|GITHUB_REPO_URL=${SAFE}$|RUNNER_NAME=${SAFE}$|RUNNER_LABELS=${SAFE}$|RUNNER_DIR=${SAFE}$)" "$1"; then
     echo "ERROR: conf file contains unexpected or unsafe content:" >&2
     grep -nE -v "^\s*(#|$|GITHUB_REPO_URL=${SAFE}$|RUNNER_NAME=${SAFE}$|RUNNER_LABELS=${SAFE}$|RUNNER_DIR=${SAFE}$)" "$1" >&2

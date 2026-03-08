@@ -178,10 +178,11 @@ jobs:
 
           CURRENT=$(az vmss show -g "$RG" -n "$VMSS_NAME" --query "sku.capacity" -o tsv)
           echo "Current capacity: $CURRENT"
-          echo "Queued jobs: $QUEUED"
+          echo "Queued jobs: $QUEUED (skip_queue_check=$SKIP_QUEUE)"
 
           # --- Scale UP if jobs are queued and capacity is insufficient ---
-          if [ "$QUEUED" -gt 0 ] && [ "$CURRENT" -lt "$QUEUED" ]; then
+          # Only trust QUEUED when the queue check actually ran
+          if [ "$SKIP_QUEUE" != "true" ] && [ "$QUEUED" -gt 0 ] && [ "$CURRENT" -lt "$QUEUED" ]; then
             TARGET=$QUEUED
             [ -n "$MAX" ] && [ "$TARGET" -gt "$MAX" ] && TARGET="$MAX"
             echo "TARGET=$TARGET" >> "$GITHUB_ENV"
@@ -195,8 +196,8 @@ jobs:
             exit 0
           fi
 
-          # If jobs are queued, don't scale down
-          if [ "$QUEUED" -gt 0 ]; then
+          # If queue check ran and jobs are queued, don't scale down
+          if [ "$SKIP_QUEUE" != "true" ] && [ "$QUEUED" -gt 0 ]; then
             echo "Jobs still queued ($QUEUED), keeping $CURRENT instances"
             exit 0
           fi
@@ -218,10 +219,14 @@ jobs:
 
           echo "Average CPU: ${AVG_CPU}%"
 
-          # If CPU < 20%, scale down by 1 (min 0). Fallback to no scale-down if bc is unavailable.
+          # If CPU < 20%, scale down by 1 (min 1 — never remove the last runner from a single sample).
+          # Fallback to no scale-down if bc is unavailable.
           if [ "$(echo "$AVG_CPU < 20" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
+            if [ "$CURRENT" -le 1 ]; then
+              echo "Only 1 instance running — not scaling to 0 from CPU alone"
+              exit 0
+            fi
             NEW=$((CURRENT - 1))
-            [ "$NEW" -lt 0 ] && NEW=0
             echo "SCALE_DOWN=$NEW" >> "$GITHUB_ENV"
             echo "Low utilization — will scale from $CURRENT to $NEW"
           else
