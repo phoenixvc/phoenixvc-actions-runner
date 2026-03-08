@@ -40,6 +40,7 @@ renovate.json       # Dependency update config (Terraform + GH Actions)
 - Runner Health Check: checks service liveness and restarts stalled listeners when jobs are queued.
 - Scale Runners: manual scale and scheduled auto-scale with budget guard and dynamic autoscale cap retrieval.
 - Test Alerts: sends test notifications and prints estimated monthly costs (current/minimum).
+- OIDC Claims Check (dev): prints OIDC token claims (subject, audience, issuer) to verify federated identity setup for branch refs.
 
 ## Alerts
 
@@ -55,3 +56,11 @@ renovate.json       # Dependency update config (Terraform + GH Actions)
   - `ZAR_PER_USD` (default 19)
   - `MONTHLY_BUDGET_ZAR` (default 1000)
 - Estimates use 720 hours/month and include the listener VM + VMSS capacity.
+
+## CI on dev branch
+
+- Configure Microsoft Entra federated identity credential for the dev branch ref:
+  - Subject: `repo:phoenixvc/phoenixvc-actions-runner:ref:refs/heads/dev`
+  - Issuer: `https://token.actions.githubusercontent.com`
+  - Audience: `api://AzureADTokenExchange`
+- Optional fallback: add `AZURE_CREDENTIALS` secret (JSON: clientId, tenantId, subscriptionId, clientSecret) enabling Service Principal login when OIDC is not yet configured.

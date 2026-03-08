@@ -42,11 +42,19 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Azure login (OIDC)
+        id: oidc_login
+        continue-on-error: true
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Azure login (Service Principal fallback)
+        if: ${{ steps.oidc_login.outcome == 'failure' && secrets.AZURE_CREDENTIALS != '' }}
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Set Ubuntu image version if provided
         if: ${{ vars.RUNNER_UBUNTU_IMAGE_VERSION != '' }}

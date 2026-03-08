@@ -1,0 +1,30 @@
+name: OIDC Claims Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  show-claims:
+    name: Show OIDC token claims
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get OIDC token (audience AzureADTokenExchange)
+        id: id
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange');
+            core.setOutput('token', token);
+
+      - name: Print decoded claims
+        run: |
+          TOK="${{ steps.id.outputs.token }}"
+          PAY=$(echo "$TOK" | cut -d . -f 2 | base64 -d 2>/dev/null || echo "{}")
+          echo "$PAY" | jq .
+          echo "Subject: $(echo "$PAY" | jq -r '.sub')"
+          echo "Audience: $(echo "$PAY" | jq -r '.aud')"
+          echo "Issuer: $(echo "$PAY" | jq -r '.iss')"
