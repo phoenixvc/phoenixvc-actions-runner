@@ -26,9 +26,9 @@ variable "listener_vm_size" {
 }
 
 variable "vmss_min_capacity" {
-  description = "Minimum VMSS instances (0 for scale-to-zero)"
+  description = "Minimum VMSS instances (0 for scale-to-zero). Set to 1 to ensure a runner is always warm."
   type        = number
-  default     = 0
+  default     = 1
 }
 
 variable "vmss_max_capacity" {
