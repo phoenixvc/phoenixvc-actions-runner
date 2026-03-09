@@ -13,7 +13,9 @@ param(
   [string]$RunnerAlertEmail,
   [string]$RunnerVmssName,
   [string]$RunnerAutoscaleSettingName,
-  [string]$RunnerAlertsActionGroup
+  [string]$RunnerAlertsActionGroup,
+  [string]$RunnerVmssMaxCapacity,
+  [string]$RunnerVmssMinCapacity
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -51,4 +53,6 @@ Set-GitHubVariable "RUNNER_ALERT_EMAIL" $RunnerAlertEmail -Optional $true
 Set-GitHubVariable "RUNNER_VMSS_NAME" $RunnerVmssName -Optional $true
 Set-GitHubVariable "RUNNER_AUTOSCALE_SETTING_NAME" $RunnerAutoscaleSettingName -Optional $true
 Set-GitHubVariable "RUNNER_ALERTS_ACTION_GROUP" $RunnerAlertsActionGroup -Optional $true
+Set-GitHubVariable "RUNNER_VMSS_MAX_CAPACITY" $RunnerVmssMaxCapacity -Optional $true
+Set-GitHubVariable "RUNNER_VMSS_MIN_CAPACITY" $RunnerVmssMinCapacity -Optional $true
 Write-Host "Secrets and variables updated on $Owner/$Repo"
