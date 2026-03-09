@@ -20,12 +20,16 @@ param(
     [string]$RunnerDir     = "\actions-runner",
     [string]$RepoUrl       = "https://github.com/JustAGhosT/agentkit-forge",
     [string]$Labels        = "self-hosted,windows,x64",
-    [string]$ExpectedHash  = "83E56E05B21EB58C9697F82E52C53B30867335FF039CD5D44D1A1A24D2149F4B"
+    [string]$ExpectedHash
 )
 
 $ErrorActionPreference = "Stop"
 
+# Known hash for the repo-default version (runner-version.env)
+$DefaultHash = "83E56E05B21EB58C9697F82E52C53B30867335FF039CD5D44D1A1A24D2149F4B"
+
 # Derive RunnerVersion from runner-version.env if not explicitly provided
+$callerSuppliedVersion = [bool]$RunnerVersion
 if (-not $RunnerVersion) {
     $envFile = Join-Path $PSScriptRoot "..\runner-version.env"
     if (Test-Path $envFile) {
@@ -33,6 +37,19 @@ if (-not $RunnerVersion) {
         if ($match) { $RunnerVersion = $match.Matches[0].Groups[1].Value }
     }
     if (-not $RunnerVersion) { $RunnerVersion = "2.332.0" }
+}
+
+# Resolve ExpectedHash: use the known default hash only when version matches the repo default.
+# If the caller overrode RunnerVersion without providing a hash, require it explicitly.
+if (-not $PSBoundParameters.ContainsKey('ExpectedHash')) {
+    if ($RunnerVersion -eq "2.332.0") {
+        $ExpectedHash = $DefaultHash
+    } elseif ($callerSuppliedVersion) {
+        throw "RunnerVersion '$RunnerVersion' differs from repo default (2.332.0). Pass -ExpectedHash with the correct SHA256 from https://github.com/actions/runner/releases, or pass -ExpectedHash '' to skip verification."
+    } else {
+        Write-Warning "runner-version.env specifies $RunnerVersion but no matching hash is known. Hash verification will be skipped."
+        $ExpectedHash = ""
+    }
 }
 
 $Token = $env:GITHUB_RUNNER_TOKEN

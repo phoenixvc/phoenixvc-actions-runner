@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api repos/phoenixvc/phoenixvc-actions-runner/pulls/29/comments --jq '.[] | {path: .path, line: .diff_hunk | split\\(\"\"\\\\n\"\"\\) | last, body: .body[0:200], in_reply_to_id: .in_reply_to_id}')",
+      "Bash(gh api repos/phoenixvc/phoenixvc-actions-runner/pulls/29/comments --jq '.[] | select\\(.in_reply_to_id == null\\) | {id: .id, path: .path, body: .body[0:500]}')",
+      "Bash(git checkout master)",
+      "Bash(git pull origin master)"
+    ]
+  }
+}

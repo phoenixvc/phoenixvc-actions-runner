@@ -10,7 +10,10 @@ param(
   [string]$RunnerResourceGroupName,
   [string]$RunnerLocation,
   [string]$RunnerTags,
-  [string]$RunnerAlertEmail
+  [string]$RunnerAlertEmail,
+  [string]$RunnerVmssName,
+  [string]$RunnerAutoscaleSettingName,
+  [string]$RunnerAlertsActionGroup
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -45,4 +48,7 @@ Set-GitHubVariable "RUNNER_RESOURCE_GROUP_NAME" $RunnerResourceGroupName
 Set-GitHubVariable "RUNNER_LOCATION" $RunnerLocation
 Set-GitHubVariable "RUNNER_TAGS" $RunnerTags -Optional $true
 Set-GitHubVariable "RUNNER_ALERT_EMAIL" $RunnerAlertEmail -Optional $true
+Set-GitHubVariable "RUNNER_VMSS_NAME" $RunnerVmssName -Optional $true
+Set-GitHubVariable "RUNNER_AUTOSCALE_SETTING_NAME" $RunnerAutoscaleSettingName -Optional $true
+Set-GitHubVariable "RUNNER_ALERTS_ACTION_GROUP" $RunnerAlertsActionGroup -Optional $true
 Write-Host "Secrets and variables updated on $Owner/$Repo"
