@@ -20,19 +20,24 @@ variable "environment" {
 }
 
 variable "listener_vm_size" {
-  description = "VM size for the listener"
+  description = "VM size for the listener (B1ms = 1 vCPU, B2s = 2 vCPUs)"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B1ms"
 }
 
 variable "vmss_min_capacity" {
-  description = "Minimum VMSS instances (0 for scale-to-zero)"
+  description = "Minimum VMSS instances (0 for scale-to-zero). Set to 1 to ensure a runner is always warm."
   type        = number
-  default     = 0
+  default     = 1
+
+  validation {
+    condition     = var.vmss_min_capacity >= 0
+    error_message = "vmss_min_capacity must be >= 0."
+  }
 }
 
 variable "vmss_max_capacity" {
-  description = "Maximum VMSS instances for autoscale. Each B1s instance uses 1 vCPU; the listener VM uses 2 (B2s). Stay within your regional core quota."
+  description = "Maximum VMSS instances for autoscale. Each B1s instance uses 1 vCPU; the listener VM uses 1 (B1ms). Stay within your regional core quota."
   type        = number
   default     = 4
 

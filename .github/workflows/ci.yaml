@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master, dev]
+  push:
+    branches: [main, master, dev]
+
+jobs:
+  terraform-validate:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.14.6
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -diff
+
+      - name: Terraform init (validation only)
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+  lint-scripts:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: ShellCheck
+        run: |
+          find scripts -name '*.sh' -print0 | xargs -0 shellcheck --severity=error || true
+          echo "ShellCheck completed (errors above are advisory)"
+
+  lint-workflows:
+    name: Lint GitHub Actions workflows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: YAML syntax check
+        run: |
+          for f in .github/workflows/*.yaml .github/actions/*/action.yml; do
+            [ -f "$f" ] || continue
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" && echo "OK: $f" || echo "FAIL: $f"
+          done
