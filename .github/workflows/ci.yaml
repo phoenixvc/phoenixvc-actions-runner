@@ -43,8 +43,13 @@ jobs:
 
       - name: ShellCheck
         run: |
-          find scripts -name '*.sh' -print0 | xargs -0 shellcheck --severity=error || true
-          echo "ShellCheck completed (errors above are advisory)"
+          FAILED=0
+          while IFS= read -r -d '' f; do
+            if ! shellcheck --severity=warning "$f"; then
+              FAILED=1
+            fi
+          done < <(find scripts -name '*.sh' -print0)
+          exit $FAILED
 
   lint-workflows:
     name: Lint GitHub Actions workflows
@@ -54,9 +59,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: YAML syntax check
+      - name: Install actionlint
         run: |
-          for f in .github/workflows/*.yaml .github/actions/*/action.yml; do
+          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          echo "." >> "$GITHUB_PATH"
+
+      - name: Validate workflows with actionlint
+        run: actionlint -color
+
+      - name: YAML syntax check (composite actions)
+        run: |
+          FAILED=0
+          for f in .github/actions/*/action.yml; do
             [ -f "$f" ] || continue
-            python3 -c "import yaml; yaml.safe_load(open('$f'))" && echo "OK: $f" || echo "FAIL: $f"
+            if ! python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f"; then
+              echo "FAIL: $f"
+              FAILED=1
+            else
+              echo "OK: $f"
+            fi
           done
+          exit $FAILED
