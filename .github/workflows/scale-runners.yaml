@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       capacity:
-        description: "Number of VMSS instances to scale to (capped by autoscale max, default 4)"
+        description: "Number of VMSS instances to scale to (capped by autoscale max)"
         required: true
         default: "1"
         type: choice
