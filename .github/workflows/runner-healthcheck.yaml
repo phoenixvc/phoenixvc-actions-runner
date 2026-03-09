@@ -55,7 +55,8 @@ jobs:
         env:
           LISTENER_VM: ${{ vars.RUNNER_LISTENER_VM_NAME || 'prod-runner-listener' }}
         run: |
-          # shellcheck disable=SC2016 — single-quoted script block runs on the remote VM
+          # shellcheck disable=SC2016
+          # single-quoted script block runs on the remote VM
           az vm run-command invoke \
             -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
             -n "$LISTENER_VM" \
