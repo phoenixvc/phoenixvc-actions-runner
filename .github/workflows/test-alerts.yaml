@@ -70,9 +70,24 @@ jobs:
           echo "Estimated monthly cost — current: USD=${{ steps.cost_current.outputs.usd_estimate }} ZAR=${{ steps.cost_current.outputs.zar_estimate }}"
           echo "Estimated monthly cost — minimum: USD=${{ steps.cost_min.outputs.usd_estimate }} ZAR=${{ steps.cost_min.outputs.zar_estimate }}"
 
+      - name: Show alert group receivers
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          echo "Action group: $ALERTS_AG (resource group: $RG)"
+          RECEIVERS=$(az monitor action-group show \
+            --name "$ALERTS_AG" -g "$RG" \
+            --query "emailReceivers[].{name:name,email:emailAddress,status:status}" \
+            -o table 2>/dev/null) || true
+          if [ -z "$RECEIVERS" ] || echo "$RECEIVERS" | grep -q "^$"; then
+            echo "::warning::No email receivers configured on action group '$ALERTS_AG'. Add RUNNER_ALERT_EMAIL variable and run terraform apply."
+          else
+            echo "$RECEIVERS"
+          fi
+
       - name: Trigger test notifications
         run: |
           az monitor action-group test-notifications create \
             --resource-group "${{ vars.RUNNER_RESOURCE_GROUP_NAME }}" \
             --action-group-name "$ALERTS_AG" \
-            --alert-type metricstaticthreshold
+            --alert-type metricstaticthreshold 2>/dev/null \
+            || echo "::warning::test-notifications failed (no receivers configured?) — skipping"

@@ -43,6 +43,20 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
+      - name: Show alert group receivers
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          echo "Action group: $ALERTS_AG (resource group: $RG)"
+          RECEIVERS=$(az monitor action-group show \
+            --name "$ALERTS_AG" -g "$RG" \
+            --query "emailReceivers[].{name:name,email:emailAddress,status:status}" \
+            -o table 2>/dev/null) || true
+          if [ -z "$RECEIVERS" ] || echo "$RECEIVERS" | grep -q "^$"; then
+            echo "::warning::No email receivers on action group '$ALERTS_AG'"
+          else
+            echo "$RECEIVERS"
+          fi
+
       - name: Get autoscale maximum
         id: cap
         uses: ./.github/actions/vmss-cap
@@ -162,6 +176,20 @@ jobs:
           client-id: ${{ secrets.ARM_CLIENT_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Show alert group receivers
+        run: |
+          RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
+          echo "Action group: $ALERTS_AG (resource group: $RG)"
+          RECEIVERS=$(az monitor action-group show \
+            --name "$ALERTS_AG" -g "$RG" \
+            --query "emailReceivers[].{name:name,email:emailAddress,status:status}" \
+            -o table 2>/dev/null) || true
+          if [ -z "$RECEIVERS" ] || echo "$RECEIVERS" | grep -q "^$"; then
+            echo "::warning::No email receivers on action group '$ALERTS_AG'"
+          else
+            echo "$RECEIVERS"
+          fi
 
       - name: Get autoscale maximum
         id: cap
