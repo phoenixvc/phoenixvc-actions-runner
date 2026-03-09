@@ -28,6 +28,13 @@ locals {
   tags = merge(var.tags, { environment = var.environment })
 }
 
+check "vmss_capacity_range" {
+  assert {
+    condition     = var.vmss_min_capacity <= var.vmss_max_capacity
+    error_message = "vmss_min_capacity (${var.vmss_min_capacity}) must not exceed vmss_max_capacity (${var.vmss_max_capacity})."
+  }
+}
+
 resource "azurerm_network_interface" "listener" {
   name                = "${var.environment}-runner-listener-nic"
   location            = var.location

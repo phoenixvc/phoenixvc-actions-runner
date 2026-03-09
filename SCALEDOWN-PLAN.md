@@ -24,6 +24,34 @@
 
 ---
 
+## Terraform Drift Reconciliation (Required Before Apply)
+
+The Azure CLI changes above modified resources that are **already managed by Terraform** in `phoenixvc/mystira.workspace`. This creates configuration drift — Terraform state still reflects the old values. **No `terraform import` is needed** (the resources are already in state), but you must update the Terraform code to match the new desired state before running `terraform plan/apply`, otherwise Terraform will attempt to revert the CLI changes.
+
+**Procedure:**
+
+1. Update the Terraform code for each affected resource (see sections below) to match the new values
+2. Run `terraform plan` in each environment and verify:
+   - PostgreSQL shows no change (code matches CLI state)
+   - Redis shows no change
+   - App Service Plan shows no change
+   - Static Web Apps show no change
+3. If `terraform plan` shows unexpected changes (e.g. Terraform wants to revert a value), check that the code update matches what the CLI set
+4. Only proceed with `terraform apply` once the plan shows **only** the intentional new changes (AKS scaledown, Service Bus migration, etc.) and no drift-reverting changes
+
+**Affected resources and their Terraform addresses:**
+
+| CLI Change | Terraform Resource Address | Azure Resource ID |
+| ---------- | -------------------------- | ----------------- |
+| PostgreSQL SKU + backup | `module.shared_postgresql.azurerm_postgresql_flexible_server.this` | `/subscriptions/.../resourceGroups/mys-prod-core-rg-san/providers/Microsoft.DBforPostgreSQL/flexibleServers/mys-prod-core-db` |
+| Redis capacity | `module.shared_redis.azurerm_redis_cache.this` | `/subscriptions/.../resourceGroups/mys-prod-core-rg-san/providers/Microsoft.Cache/Redis/mys-prod-core-cache` |
+| App Service Plan SKU | Look up in mystira-app module | `/subscriptions/.../resourceGroups/mys-prod-mystira-rg-san/providers/Microsoft.Web/serverfarms/mys-prod-mystira-plan-san` |
+| Dev Story ASP SKU | Look up in story module | `/subscriptions/.../resourceGroups/mys-dev-story-rg-san/providers/Microsoft.Web/serverfarms/mys-dev-story-asp-san` |
+| Static Web App (mystira) | Look up in mystira-app module | `/subscriptions/.../resourceGroups/mys-prod-mystira-rg-san/providers/Microsoft.Web/staticSites/mys-prod-mystira-swa-eus2` |
+| Static Web App (story) | `module.story_generator.azurerm_static_web_app.this` | `/subscriptions/.../resourceGroups/mys-prod-story-rg-san/providers/Microsoft.Web/staticSites/mys-prod-story-swa-eus2` |
+
+---
+
 ## Terraform Changes Required
 
 All changes below need to be applied in `phoenixvc/mystira.workspace` repo and then `terraform apply` in each environment. The Azure CLI changes above will cause Terraform drift — these Terraform changes bring the code in line with the new state AND add further optimizations.
@@ -103,7 +131,50 @@ sku           = "Standard"  # was "Premium"
 ```
 **Savings:** ~$665/mo (Premium 1MU ~$675 → Standard ~$10)
 
-> **WARNING:** Premium → Standard is a destructive change. It requires creating a new namespace (Standard tier) and migrating topics/subscriptions. You cannot in-place downgrade. Consider: export topic/subscription config, destroy Premium, create Standard. If the app barely has traffic, this is fine.
+> **WARNING:** Premium → Standard is a **destructive, non-reversible in-place change**. Azure does not support downgrading a Service Bus namespace tier. This requires creating a new Standard namespace and migrating all resources.
+
+**Service Bus Migration Playbook:**
+
+**Pre-migration (before any Terraform changes):**
+
+1. Export all topics, subscriptions, filters, and shared access policies:
+
+   ```bash
+   az servicebus topic list --namespace-name <premium-namespace> -g mys-prod-core-rg-san -o json > sb-topics-backup.json
+   az servicebus topic subscription list --namespace-name <premium-namespace> -g mys-prod-core-rg-san --topic-name <each-topic> -o json > sb-subs-backup.json
+   az servicebus namespace authorization-rule list --namespace-name <premium-namespace> -g mys-prod-core-rg-san -o json > sb-auth-rules-backup.json
+   ```
+
+2. Identify all applications using the namespace connection strings (check app settings, Key Vault references, and environment variables in AKS deployments)
+3. Plan for a maintenance window — messages in-flight during the switch will be lost unless the queue is drained first
+
+**Terraform approach:**
+
+- Create the new Standard namespace with a different name (e.g. add `-v2` suffix) so both can coexist during migration
+- Add `lifecycle { create_before_destroy = true }` if using the same name is required
+- Update the module call:
+
+  ```hcl
+  sku            = "Standard"  # was "Premium"
+  # REMOVE: capacity = 1
+  # REMOVE: zone_redundant = true
+  ```
+
+**Migration steps:**
+
+1. `terraform apply` — creates the new Standard namespace (old Premium still exists if using `-v2` name)
+2. Recreate topics, subscriptions, and filters in the new namespace (via Terraform or `az servicebus` CLI)
+3. Update application connection strings to point to the new namespace and redeploy
+4. Verify all topics/subscriptions are receiving and processing messages correctly
+5. Drain remaining messages from the old Premium namespace
+6. `terraform apply` to destroy the old Premium namespace (or `az servicebus namespace delete`)
+
+**Rollback plan:**
+
+- Retain the old Premium namespace for 24-48 hours after migration
+- If issues arise, switch application connection strings back to the Premium namespace
+- Re-export any topic/subscription configs created in the new namespace using `az servicebus` CLI
+- Document the Premium namespace name and connection string in a secure location before deletion
 
 #### 1.7 Static Web App — Story Generator (line 496, module call `module.story_generator`)
 **Current (already changed via CLI):** Now Free
@@ -299,26 +370,54 @@ If it must stay:
 | Resource | Cores |
 |----------|-------|
 | Prod AKS (3 pools × 1 node × B2s) | 6 |
-| Staging AKS (2 pools) | 3 |
-| Dev AKS (2 pools) | 3 |
+| Staging AKS (2 pools × 1 node × B2s) | 4 |
+| Dev AKS (1 default + 1 chain × B2s) | 4 |
 | Actions runner listener (B1ms) | 1 |
-| Actions runner VMSS (0-4 × B1s) | 0-4 |
-| **Total** | **13-17** |
+| Actions runner VMSS (1-4 × B1s) | 1-4 |
+| **Total** | **16-19** |
 
-> **Recommendation:** Request quota increase to 20 cores in SouthAfricaNorth to accommodate AKS + VMSS headroom. Current limit of 10 is too tight even after scaledown. Alternatively, use B1s (1 core) for AKS nodes instead of B2s (2 cores) to fit within 10, but B1s may be too small for Kubernetes system pods.
+### BLOCKING PRECONDITION: Quota Increase Required
+
+> The current SouthAfricaNorth regional vCPU quota is **10 cores**. The target state requires **16-19 cores**. **You must request and receive a quota increase before running `terraform apply` on any environment that starts AKS clusters.** Without this, Terraform will fail with `OperationNotAllowed` errors.
+
+**Quota request procedure:**
+
+1. Go to Azure Portal → Subscriptions → Usage + quotas
+2. Request increase for "Total Regional vCPUs" in SouthAfricaNorth to **at least 20** (recommended: 25 for headroom)
+3. Wait for approval (typically 1-4 hours for small increases)
+4. Verify: `az vm list-usage --location southafricanorth --query "[?name.value=='cores'].{current:currentValue, limit:limit}" -o table`
+
+**Temporary mitigation (if quota approval is delayed):**
+
+If the quota increase is not approved in time, change AKS node VM size from `Standard_B2s` (2 cores) to `Standard_B1s` (1 core) across all environments:
+
+| Resource | B2s cores | B1s cores |
+| -------- | --------- | --------- |
+| Prod AKS (3 pools) | 6 | 3 |
+| Staging AKS (2 pools) | 4 | 2 |
+| Dev AKS (2 pools) | 4 | 2 |
+| Runner listener + VMSS | 2-5 | 2-5 |
+| **Total** | **16-19** | **9-12** |
+
+With B1s nodes, the total fits within 10 cores (at VMSS=1). However, **B1s has only 1 vCPU and 0.5 GiB RAM** — this may be too constrained for Kubernetes system pods (kubelet, kube-proxy, CoreDNS). Monitor pod scheduling failures and switch to B2s once quota is approved. Mark this as a **temporary mitigation only**.
 
 ---
 
 ## Implementation Order
 
-1. **Terraform changes (all envs):** Update all values in `main.tf` files as specified above
-2. **`terraform fmt -check`** in each environment
-3. **Dev first:** `terraform plan` + `terraform apply` in dev (lowest risk)
-4. **Staging:** `terraform plan` + `terraform apply`
-5. **Prod:** `terraform plan` + `terraform apply` — Service Bus change will be destructive, handle carefully
-6. **West US:** Decide keep or delete, handle separately
-7. **Front Door:** Consolidate if desired (optional)
-8. **Cosmos DB:** Evaluate serverless migration (optional, low priority)
+1. **PREREQUISITE: Submit quota increase request** — Request SouthAfricaNorth "Total Regional vCPUs" increase to at least 20 cores (see "Quota Increase Required" above). Do not proceed with AKS-related applies until approved.
+2. **PREREQUISITE: Reconcile Terraform drift** — Update all Terraform code for CLI-changed resources (see "Terraform Drift Reconciliation" above). Run `terraform plan` in each environment and verify no unexpected drift-reverting changes.
+3. **Terraform code changes (all envs):** Update all values in `main.tf` files as specified in sections 1-3 above
+4. **`terraform fmt -check`** in each environment
+5. **Wait for quota approval** — Verify with `az vm list-usage`. If delayed, apply the B1s temporary mitigation.
+6. **Dev first:** `az aks start` the cluster, then `terraform plan` + `terraform apply` (lowest risk)
+7. **Staging:** `az aks start` the cluster, then `terraform plan` + `terraform apply`
+8. **Prod (non-Service Bus):** `terraform plan` + `terraform apply` for AKS, PostgreSQL, Redis, SWA, AI model changes only. **Exclude Service Bus changes from this apply.**
+9. **Prod Service Bus migration:** Follow the Service Bus Migration Playbook (section 1.6) as a separate operation
+10. **Start AKS clusters:** `az aks start` for any remaining stopped clusters
+11. **West US:** Decide keep or delete, handle separately
+12. **Front Door:** Consolidate if desired (optional, low priority)
+13. **Cosmos DB:** Evaluate serverless migration (optional, low priority)
 
 ---
 
