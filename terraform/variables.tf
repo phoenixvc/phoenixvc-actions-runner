@@ -32,9 +32,14 @@ variable "vmss_min_capacity" {
 }
 
 variable "vmss_max_capacity" {
-  description = "Maximum VMSS instances for autoscale"
+  description = "Maximum VMSS instances for autoscale. Each B1s instance uses 1 vCPU; the listener VM uses 2 (B2s). Stay within your regional core quota."
   type        = number
   default     = 4
+
+  validation {
+    condition     = var.vmss_max_capacity >= 0 && var.vmss_max_capacity <= 10
+    error_message = "vmss_max_capacity must be between 0 and 10."
+  }
 }
 
 variable "ssh_public_key" {
