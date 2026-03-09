@@ -24,6 +24,10 @@ provider "azurerm" {
   features {}
 }
 
+locals {
+  tags = merge(var.tags, { environment = var.environment })
+}
+
 resource "azurerm_network_interface" "listener" {
   name                = "${var.environment}-runner-listener-nic"
   location            = var.location
@@ -36,7 +40,7 @@ resource "azurerm_network_interface" "listener" {
     public_ip_address_id          = azurerm_public_ip.listener.id
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "azurerm_public_ip" "listener" {
@@ -46,7 +50,7 @@ resource "azurerm_public_ip" "listener" {
   allocation_method   = "Static"
   sku                 = "Standard"
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "azurerm_network_security_group" "runner-nsg" {
@@ -66,7 +70,7 @@ resource "azurerm_network_security_group" "runner-nsg" {
     destination_port_range     = "22"
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 resource "azurerm_network_interface_security_group_association" "listener" {
@@ -108,7 +112,7 @@ resource "azurerm_linux_virtual_machine" "listener" {
     runner_version = var.runner_version
   }))
 
-  tags = var.tags
+  tags = local.tags
 
   lifecycle {
     ignore_changes = [custom_data]
@@ -158,7 +162,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "phoenixvc" {
     type = "SystemAssigned"
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # --- VMSS Autoscale ---
@@ -219,7 +223,7 @@ resource "azurerm_monitor_autoscale_setting" "vmss" {
     }
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # --- Azure Monitor: alert when listener VM is unavailable > 30 min ---
@@ -229,7 +233,7 @@ resource "azurerm_monitor_action_group" "runner_alerts" {
   resource_group_name = var.resource_group_name
   short_name          = "RunnerAlert"
 
-  tags = var.tags
+  tags = local.tags
 
   dynamic "email_receiver" {
     for_each = concat(var.alert_emails, var.alert_email == "" ? [] : [var.alert_email])
@@ -261,7 +265,7 @@ resource "azurerm_monitor_metric_alert" "listener_vm_unavailable" {
     action_group_id = azurerm_monitor_action_group.runner_alerts.id
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # --- Azure Activity Log Alert: notify on VMSS updates ---
@@ -280,7 +284,7 @@ resource "azurerm_monitor_activity_log_alert" "vmss_updates" {
     action_group_id = azurerm_monitor_action_group.runner_alerts.id
   }
 
-  tags = var.tags
+  tags = local.tags
 }
 
 # --- Azure Activity Log Alert: notify on VMSS scale actions ---
@@ -299,5 +303,5 @@ resource "azurerm_monitor_activity_log_alert" "vmss_scale" {
     action_group_id = azurerm_monitor_action_group.runner_alerts.id
   }
 
-  tags = var.tags
+  tags = local.tags
 }

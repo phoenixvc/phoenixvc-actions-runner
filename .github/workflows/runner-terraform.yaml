@@ -32,6 +32,9 @@ jobs:
       TF_VAR_runner_subnet_id: ${{ secrets.RUNNER_SUBNET_ID }}
       TF_VAR_ssh_public_key: ${{ secrets.RUNNER_SSH_PUBLIC_KEY }}
       TF_VAR_alert_email: ${{ vars.RUNNER_ALERT_EMAIL }}
+      TF_VAR_tags: ${{ vars.RUNNER_TAGS }}
+      TF_VAR_vmss_max_capacity: ${{ vars.RUNNER_VMSS_MAX_CAPACITY || '4' }}
+      TF_VAR_vmss_min_capacity: ${{ vars.RUNNER_VMSS_MIN_CAPACITY || '0' }}
 
     defaults:
       run:
@@ -50,8 +53,19 @@ jobs:
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
+      - name: Evaluate SP creds presence
+        id: spflag
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -n "${AZURE_CREDENTIALS}" ]; then
+            echo "has_sp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sp=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Azure login (Service Principal fallback)
-        if: ${{ steps.oidc_login.outcome == 'failure' && secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ steps.oidc_login.outcome == 'failure' && steps.spflag.outputs.has_sp == 'true' }}
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -64,7 +78,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
-          terraform_version: 1.14.5
+          terraform_version: 1.14.6
 
       - name: Terraform init
         run: terraform init -input=false

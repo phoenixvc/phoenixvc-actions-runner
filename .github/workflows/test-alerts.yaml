@@ -15,6 +15,8 @@ jobs:
       VMSS_RATE_USD_B1S: ${{ vars.VMSS_RATE_USD_B1S }}
       LISTENER_RATE_USD_B2S: ${{ vars.LISTENER_RATE_USD_B2S }}
       ZAR_PER_USD: ${{ vars.ZAR_PER_USD }}
+      VMSS_NAME: ${{ vars.RUNNER_VMSS_NAME || 'prod-runner-phoenixvc-vmss' }}
+      ALERTS_AG: ${{ vars.RUNNER_ALERTS_ACTION_GROUP || 'prod-runner-alerts' }}
     steps:
       - name: Checkout (local composite actions)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -30,9 +32,15 @@ jobs:
         id: cap
         run: |
           RG="${{ vars.RUNNER_RESOURCE_GROUP_NAME }}"
-          VMSS="prod-runner-phoenixvc-vmss"
-          CURRENT=$(az vmss show -g "$RG" -n "$VMSS" --query "sku.capacity" -o tsv || echo "0")
-          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          RAW=$(az vmss show -g "$RG" -n "$VMSS_NAME" --query "sku.capacity" -o tsv) || {
+            echo "::error::Failed to query VMSS capacity (az exit code $?)"
+            exit 1
+          }
+          if ! echo "$RAW" | grep -qE '^[0-9]+$'; then
+            echo "::error::Unexpected VMSS capacity value: '$RAW'"
+            exit 1
+          fi
+          echo "current=$RAW" >> "$GITHUB_OUTPUT"
 
       - name: Estimate cost at current
         id: cost_current
@@ -66,5 +74,5 @@ jobs:
         run: |
           az monitor action-group test-notifications create \
             --resource-group "${{ vars.RUNNER_RESOURCE_GROUP_NAME }}" \
-            --action-group-name "prod-runner-alerts" \
+            --action-group-name "$ALERTS_AG" \
             --alert-type metricstaticthreshold
