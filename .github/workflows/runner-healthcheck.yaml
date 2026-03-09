@@ -38,7 +38,7 @@ jobs:
             [ -f "$conf" ] || continue
             REPO_URL=$(grep -oP 'GITHUB_REPO_URL=\K.*' "$conf" 2>/dev/null || true)
             [ -z "$REPO_URL" ] && continue
-            REPO=$(echo "$REPO_URL" | sed 's|https://github.com/||')
+            REPO="${REPO_URL#https://github.com/}"
             RQ=$(gh api "/repos/$REPO/actions/runs?status=queued&per_page=100" --jq '.total_count' 2>/dev/null || echo "0")
             COUNT=$((COUNT + RQ))
           done
@@ -55,6 +55,8 @@ jobs:
         env:
           LISTENER_VM: ${{ vars.RUNNER_LISTENER_VM_NAME || 'prod-runner-listener' }}
         run: |
+          # shellcheck disable=SC2016
+          # single-quoted script block runs on the remote VM
           az vm run-command invoke \
             -g ${{ vars.RUNNER_RESOURCE_GROUP_NAME }} \
             -n "$LISTENER_VM" \

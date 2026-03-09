@@ -145,7 +145,7 @@ jobs:
             REPO_URL=$(grep -oP 'GITHUB_REPO_URL=\K.*' "$conf" 2>/dev/null || true)
             [ -z "$REPO_URL" ] && continue
             # Extract owner/repo from URL
-            REPO=$(echo "$REPO_URL" | sed 's|https://github.com/||')
+            REPO="${REPO_URL#https://github.com/}"
             REPO_QUEUED=$(gh api "/repos/$REPO/actions/runs?status=queued&per_page=100" \
               --jq '.total_count' 2>/dev/null || echo "0")
             echo "$REPO queued runs: $REPO_QUEUED"

@@ -1,10 +1,15 @@
 {
     "cSpell.words": [
+        "actionlint",
         "actionsrunner",
+        "autoscale",
         "azureuser",
         "justaghost",
+        "kubelet",
         "projectname",
         "RAWKEY",
+        "shellcheck",
+        "southafricanorth",
         "vmss",
         "vnet"
     ]
