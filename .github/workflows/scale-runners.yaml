@@ -112,10 +112,12 @@ jobs:
       ALERTS_AG: ${{ vars.RUNNER_ALERTS_ACTION_GROUP || 'prod-runner-alerts' }}
 
     steps:
-      - name: Checkout (for runners.d configs)
+      - name: Checkout (for runners.d configs and local actions)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          sparse-checkout: runners.d
+          sparse-checkout: |
+            runners.d
+            .github/actions
 
       - name: Check for queued jobs across repos
         id: queued
