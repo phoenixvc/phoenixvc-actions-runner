@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhoenixVC Runner Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --accent: #58a6ff;
+            --success: #238636;
+            --warning: #d29922;
+            --error: #f85149;
+            --text: #c9d1d9;
+            --text-dim: #8b949e;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            padding: 2rem 0;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(88, 166, 255, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 600;
+            letter-spacing: -1px;
+            color: var(--accent);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 2rem 0;
+        }
+
+        .status-card {
+            background-color: var(--card-bg);
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+        }
+
+        .status-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .indicator {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            background: rgba(139, 148, 158, 0.1);
+            border: 4px solid var(--text-dim);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .status-healthy .indicator {
+            border-color: var(--success);
+            color: var(--success);
+            box-shadow: 0 0 30px rgba(35, 134, 54, 0.3);
+            background: rgba(35, 134, 54, 0.1);
+        }
+
+        .status-warning .indicator {
+            border-color: var(--warning);
+            color: var(--warning);
+            box-shadow: 0 0 30px rgba(210, 153, 34, 0.3);
+            background: rgba(210, 153, 34, 0.1);
+        }
+
+        .status-error .indicator {
+            border-color: var(--error);
+            color: var(--error);
+            box-shadow: 0 0 30px rgba(248, 81, 73, 0.3);
+            background: rgba(248, 81, 73, 0.1);
+        }
+
+        .status-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .last-update {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .stat-item {
+            background: rgba(255,255,255,0.03);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 2rem;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>PhoenixVC Runner Infrastructure</h1>
+    </header>
+
+    <div class="container" id="app">
+        <div class="status-card loading" id="status-container">
+            <div class="indicator">?</div>
+            <div class="status-text">Checking Status...</div>
+            <div class="last-update">Waiting for data...</div>
+            
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">Queued Jobs</span>
+                    <span class="stat-value" id="queued-count">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">System Memory</span>
+                    <span class="stat-value" id="memory-usage">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2026 phoenixvc | Infrastructure Monitor
+    </footer>
+
+    <script>
+        async function updateStatus() {
+            try {
+                const response = await fetch('status.json');
+                const data = await response.json();
+                
+                const container = document.getElementById('status-container');
+                const indicator = container.querySelector('.indicator');
+                const statusText = container.querySelector('.status-text');
+                const lastUpdate = container.querySelector('.last-update');
+                const queuedCount = document.getElementById('queued-count');
+                const memoryUsage = document.getElementById('memory-usage');
+
+                container.classList.remove('loading', 'status-healthy', 'status-warning', 'status-error');
+                
+                if (data.status === 'healthy') {
+                    container.classList.add('status-healthy');
+                    indicator.innerHTML = '✓';
+                    statusText.innerText = 'System Operational';
+                } else if (data.status === 'warning') {
+                    container.classList.add('status-warning');
+                    indicator.innerHTML = '!';
+                    statusText.innerText = 'Partial Outage / High Load';
+                } else {
+                    container.classList.add('status-error');
+                    indicator.innerHTML = '✕';
+                    statusText.innerText = 'System Down';
+                }
+
+                lastUpdate.innerText = `Last checked: ${new Date(data.timestamp).toLocaleString()}`;
+                queuedCount.innerText = data.queued_jobs;
+                memoryUsage.innerText = data.memory_free || 'Unknown';
+
+            } catch (err) {
+                console.error('Failed to load status:', err);
+            }
+        }
+
+        updateStatus();
+        setInterval(updateStatus, 60000); // Check every minute
+    </script>
+</body>
+</html>

@@ -312,3 +312,18 @@ resource "azurerm_monitor_activity_log_alert" "vmss_scale" {
 
   tags = local.tags
 }
+# --- Monitoring Dashboard (Azure Static Web App) ---
+
+resource "azurerm_static_site" "monitoring" {
+  name                = "${var.environment}-runner-monitoring"
+  resource_group_name = var.resource_group_name
+  location            = "West Europe" # SWA is currently only available in certain regions for Free tier, but Global for access
+  sku_tier            = "Free"
+  sku_size            = "Free"
+
+  tags = local.tags
+}
+
+output "monitoring_swa_default_host_name" {
+  value = azurerm_static_site.monitoring.default_host_name
+}
